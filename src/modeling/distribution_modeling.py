@@ -1,10 +1,11 @@
+import json
+import random
+from enum import Enum
+
 import matplotlib.pyplot as plt
+import polars as pl
 from fitter import Fitter
 from tqdm import tqdm
-import polars as pl
-import random
-import json
-from enum import Enum
 
 
 class FitMethod(str, Enum):
@@ -36,7 +37,7 @@ class DistributionEstimator:
             original_peptides_data: pl.DataFrame | None = None,
             save_to: str | None = None,
             num_of_peptides_to_model: int = 5000,
-            method: str = FitMethod.sumsquare
+            method: FitMethod = FitMethod.sumsquare
     ):
         self.results = None
         self.peptides_df = original_peptides_data
@@ -50,7 +51,8 @@ class DistributionEstimator:
 
         # Check if the provided method is a valid FitMethod
         if method not in FitMethod.__members__.values():
-            raise ValueError(f"Invalid method '{method}'. Must be one of: {', '.join(FitMethod.__members__.values())}.")
+            raise ValueError(
+                f"Invalid method '{method}'. Must be one of: {', '.join(FitMethod.__members__.values())}.")
 
         # Check if the provided distribution list is valid
         for distribution in self.distribution_list:
@@ -61,14 +63,14 @@ class DistributionEstimator:
 
     def estimate(
             self, peptides_to_model: pl.DataFrame
-    ) -> list:
+    ) -> dict[str, str]:
         self.results = {}
 
         for peptide in tqdm(
                 self.top_n_peptides_df.columns, desc="Fitting Distributions"
         ):
             self.results[peptide] = self.estimate_single_column_distribution(
-                self.top_n_peptides_df[peptide], method=self.method
+                self.top_n_peptides_df[peptide],
             )
 
         if self.save_to:
@@ -87,7 +89,7 @@ class DistributionEstimator:
         column = column.filter(column != 0)
 
         # Use the Fitter library to find the best distribution
-        f = Fitter(column, distributions=self.distribution_list)
+        f = Fitter(column.to_list(), distributions=self.distribution_list)
         f.fit()
 
         # Get the name of the best fitting distribution
@@ -103,7 +105,7 @@ class DistributionEstimator:
         column = column.filter(column != 0)
 
         # Use the Fitter library to find the best distribution
-        f = Fitter(column, distributions=self.distribution_list)
+        f = Fitter(column.to_list(), distributions=self.distribution_list)
         f.fit()
 
         # Get the name of the best fitting distribution
@@ -152,7 +154,7 @@ class DistributionEstimator:
 
     @staticmethod
     def _top_n_columns_with_least_missing_values(
-            self, df: pl.DataFrame, n: int
+            df: pl.DataFrame, n: int
     ) -> pl.DataFrame:
         # Replace 0 with None
         df = df.with_columns(pl.col(col).replace(0, None) for col in df.columns)

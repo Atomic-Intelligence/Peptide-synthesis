@@ -1,6 +1,7 @@
-from pydantic import BaseModel
 from abc import ABC, abstractmethod
+
 import polars as pl
+from pydantic import BaseModel
 
 
 class Data(BaseModel):

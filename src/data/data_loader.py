@@ -1,16 +1,17 @@
-from src.data.data_models import Data, Processor
 import polars as pl
+
+from src.data.data_models import Data, Processor
 
 
 class DataLoader:
     def __init__(
-        self,
-        clinical_data_path: str,
-        peptides_data_path: str,
-        primary_key: str,
-        number_of_samples: int | None = None,
-        processor: Processor | None = None,
-        filter_conditions: dict | None = None
+            self,
+            clinical_data_path: str,
+            peptides_data_path: str,
+            primary_key: str,
+            number_of_samples: int | None = None,
+            processor: Processor | None = None,
+            filter_conditions: dict | None = None
     ):
         self.clinical_data_path = clinical_data_path
         self.peptides_data_path = peptides_data_path
@@ -20,7 +21,7 @@ class DataLoader:
         self.filter_conditions = filter_conditions
 
     def get_data(self) -> Data:
-        "If processor is provided, it will preprocess loaded data. Otherwise, raw data is loaded."
+        """If processor is provided, it will preprocess loaded data. Otherwise, raw data is loaded."""
         try:
             clinical = pl.read_csv(self.clinical_data_path)
             peptides = pl.read_csv(self.peptides_data_path)
@@ -31,7 +32,7 @@ class DataLoader:
 
             if self.number_of_samples:
                 data.clinical = data.clinical.sort(self.primary_key).slice(0, self.number_of_samples)
-                data.peptides = data.peptides.sort(self.primary_key).slice(0, self.clinical_data_path)
+                data.peptides = data.peptides.sort(self.primary_key).slice(0, self.number_of_samples)
 
             if self.filter_conditions:
                 data.clinical = self._apply_filter_conditions(data.clinical)
