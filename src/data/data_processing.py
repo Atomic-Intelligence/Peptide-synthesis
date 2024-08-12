@@ -1,12 +1,16 @@
+from tqdm import tqdm
 import polars as pl
+import pandas as pd
+import numpy as np
+import os
 
 from src.data.data_models import Data, Processor
 
 
 class HFProcessorForSynthetization(Processor):
     def __init__(
-            self,
-            primary_key: str,
+        self,
+        primary_key: str,
     ):
         self.primary_key = primary_key
 
@@ -15,12 +19,76 @@ class HFProcessorForSynthetization(Processor):
         data = self._preprocess_peptide_data(data)
         return data
 
-    def postprocess_data(self, data: Data) -> Data:
-        # todo: check if this needs implementing
-        return data
+    def postprocess_data(
+        self,
+        data: Data,
+        remaining_peptides: list[str],
+        synthetic_data: pl.DataFrame,
+        save_to: str | None = None,
+    ) -> Data:
+        """If `save_to` parameter is None, data will be saved to current working directory."""
+        remaining_columns = {}
+
+        original_peptides = data.peptides.to_pandas()
+        original_clinical = data.clinical.to_pandas()
+
+        for peptide in tqdm(remaining_peptides, desc="Postprocessing"):
+            if peptide not in original_peptides.columns:
+                raise ValueError(
+                    f"Peptide '{peptide}' not found in original data columns."
+                )
+
+            value = original_peptides[peptide].mean()
+
+            missing_percentage = 1 - original_peptides[peptide].apply(
+                lambda x: bool(x)
+            ).sum() / len(original_peptides)
+            missing_count = int(missing_percentage * len(synthetic_data))
+            non_missing_count = len(synthetic_data) - missing_count
+
+            values = [value] * non_missing_count + [0.0] * missing_count
+            np.random.shuffle(values)
+
+            remaining_columns[peptide] = values
+
+        synthetic_data = pd.concat(
+            [synthetic_data, (pd.DataFrame(remaining_columns))], axis=1
+        )
+
+        synthetic_data_clinical = synthetic_data[original_clinical.columns]
+        synthetic_data_peptides = synthetic_data[
+            [
+                peptide if peptide != self.primary_key else peptide
+                for peptide in original_peptides.columns
+            ]
+        ]
+
+        if save_to is not None:
+            synthetic_data_clinical.to_csv(
+                f"{save_to}/synthetic_data_clinical.csv", index=False
+            )
+            synthetic_data_peptides.to_csv(
+                f"{save_to}/synthetic_data_peptides.csv", index=False
+            )
+
+        else:
+            save_to = os.getcwd()
+            synthetic_data_clinical.to_csv(
+                f"{save_to}/synthetic_data_clinical.csv", index=False
+            )
+            synthetic_data_peptides.to_csv(
+                f"{save_to}/synthetic_data_peptides.csv", index=False
+            )
+
+        print(f"Data postprocessed and saved to {save_to}.")
+
+        return Data(
+            clinical=pl.from_pandas(synthetic_data_clinical),
+            syntetic=pl.from_pandas(synthetic_data_peptides),
+        )
 
     @staticmethod
-    def _preprocess_clinical_data(self, data: Data) -> Data:
+    def _preprocess_clinical_data(data: Data) -> Data:
         data.clinical = data.clinical.select(
             pl.col(col) for col in data.clinical.columns if col != ""
         )
@@ -32,45 +100,3 @@ class HFProcessorForSynthetization(Processor):
             (pl.col(self.primary_key) / 1000).cast(pl.Int64)
         )
         return data
-
-    def get_peptides_for_modelling(
-            self, data: pl.DataFrame, missing_threshold: float
-    ) -> tuple[pl.DataFrame, list[str]]:
-        # Replace 0 with None
-        data = data.with_columns(
-            [
-                pl.when(pl.col(col) == 0).then(None).otherwise(pl.col(col)).alias(col)
-                for col in data.columns
-            ]
-        )
-
-        # Calculate the percentage of missing values in each column
-        missing_values_percentages = data.select(
-            pl.all().null_count() / pl.len()
-        ).to_dict(as_series=False)
-
-        # Identify columns with missing values below the threshold
-        columns_to_model = [
-            col
-            for col, perc in missing_values_percentages.items()
-            if perc[0] <= missing_threshold
-        ]
-
-        other_columns = set(data.columns) - set(columns_to_model)
-
-        print(f"{len(columns_to_model) - 1} columns will be synthesized using advanced methods!")
-        print(f"{len(other_columns)} will be approximated using the mean as there is not enough data!")
-
-        # Select columns to model
-        df = data.select(columns_to_model).with_columns(
-            [
-                (
-                    pl.col(col).cast(pl.Float64)
-                    if col != self.primary_key
-                    else pl.col(col).cast(pl.Int64)
-                )
-                for col in columns_to_model
-            ]
-        )
-
-        return df, list(other_columns)
