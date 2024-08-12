@@ -2,9 +2,6 @@ import numpy as np
 from scipy.stats import lognorm
 
 from copulas.univariate.base import BoundedType, ParametricType, ScipyModel
-from copulas.univariate import (BetaUnivariate, GammaUnivariate, GaussianUnivariate,
-                                GaussianKDE, TruncatedGaussian, StudentTUnivariate,
-                                UniformUnivariate, LogLaplace)
 
 
 class LognormUnivariate(ScipyModel):
@@ -39,17 +36,3 @@ class LognormUnivariate(ScipyModel):
     def _extract_constant(self):
         return self._params['loc']
 
-# Import everything from copulas.univariate and add custom classes
-__all__ = (
-    'BetaUnivariate',
-    'GammaUnivariate',
-    'GaussianKDE',
-    'GaussianUnivariate',
-    'TruncatedGaussian',
-    'StudentTUnivariate',
-    'ParametricType',
-    'BoundedType',
-    'UniformUnivariate',
-    'LogLaplace',
-    'LognormUnivariate'
-)
