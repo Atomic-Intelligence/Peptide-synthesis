@@ -15,9 +15,6 @@ class HFProcessorForSynthetization(Processor):
         data = self._preprocess_peptide_data(data)
         return data
 
-    def postprocess_data(self, data: Data) -> Data:
-        return data
-
     @staticmethod
     def _preprocess_clinical_data(data: Data) -> Data:
         data.clinical = data.clinical.select(
