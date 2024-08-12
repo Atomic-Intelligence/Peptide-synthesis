@@ -66,7 +66,7 @@ class HFProcessorForSynthetization(Processor):
 
         return Data(
             clinical=pl.from_pandas(synthetic_data_clinical),
-            syntetic=pl.from_pandas(synthetic_data_peptides),
+            peptides=pl.from_pandas(synthetic_data_peptides),
         )
 
     @staticmethod
