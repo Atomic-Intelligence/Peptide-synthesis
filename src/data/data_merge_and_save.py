@@ -8,7 +8,15 @@ def merge_and_save(
     peptides_data_list: list[pl.DataFrame],
     save_to: Path | None = None,
 ) -> None:
-    """If `save_to` parameter is None, data will be saved to current working directory."""
+    """
+    function which merges multiple groups of synthetic patients into single tables for clinical
+    and peptide data
+    note: If `save_to` parameter is None, data will be saved to current working directory.
+    Args:
+        clinical_data_list: list of clinical synthetic dataframes
+        peptides_data_list: list of peptide synthetic dataframes
+        save_to: path to directory where data will be saved
+    """
 
     if len(clinical_data_list) != len(peptides_data_list):
         raise ValueError("Length of clinical and peptides data lists must be equal.")

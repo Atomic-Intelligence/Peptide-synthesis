@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Type
 
+import pandas as pd
 import polars as pl
 import sdv
 import sdv.single_table.base
@@ -12,83 +13,58 @@ from src.modeling.custom_copula_synthesizer import CustomGaussianCopulaSynthesiz
 
 
 class Synthesizer(ABC):
-    @abstractmethod
-    def sample(self, num_samples: int, batch_size: int):
-        pass
-
-    @abstractmethod
-    def fit(self):
-        pass
-
-    @abstractmethod
-    def _load_constraints(self):
-        pass
-
-    @abstractmethod
-    def _get_metadata(
-        self, dataset: pl.DataFrame, peptide_columns: pl.Series
-    ) -> sdv.metadata.SingleTableMetadata:
-        pass
-
-
-class HFSynthesizer(Synthesizer):
-    """`save_to` is the directory where data will be saved to
-    or is loaded from if already exists. If it is None, data will
-    be saved to the current working directory."""
-
     def __init__(
-        self,
-        original_data: pl.DataFrame,
-        primary_key: str,
-        peptides_to_model: list,
-        save_to: str | None = None,
-        save_metadata: bool = False,
-        save_peptides_over_threshold: bool = False,
-        sdv_synthesizer: Type[
-            sdv.single_table.base.BaseSingleTableSynthesizer
-        ] = CustomGaussianCopulaSynthesizer,
-        random_seed: int | None = None,
-        *args,
-        **kwargs,
+            self,
+            original_data: pl.DataFrame,
+            primary_key: str,
+            peptides_to_model: list,
+            sdv_synthesizer: Type[
+                sdv.single_table.base.BaseSingleTableSynthesizer
+            ] = CustomGaussianCopulaSynthesizer,
+            random_seed: int | None = None,
+            *args,
+            **kwargs,
     ):
+        """
+        Synthesizer for clinical+peptide data
+        Args:
+            original_data: dataframe containing the original real patient data
+            primary_key: primary key column name
+            peptides_to_model: peptides which should be modeled using the copula approach
+            sdv_synthesizer: class which should be instantiated for the synthetic data model
+            random_seed: seed for random number generator to be able to reproduce experiments
+            *args: extra args for sdv_synthesizer
+            **kwargs: extra kwargs for sdv_synthesizer
+        """
         self.original_data = original_data
-        self.save_to = save_to
         self.primary_key = primary_key
         self.peptides_to_model = peptides_to_model
-        self.save_metadata = save_metadata
-        self.save_peptides_over_threshold = save_peptides_over_threshold
         self.random_seed = random_seed
 
         if self.random_seed is not None:
             np.random.seed(self.random_seed)
             torch.manual_seed(self.random_seed)
 
-        if save_to is not None:
-            if self.save_peptides_over_threshold:
-                # Save peptides that are used with copula approach to txt file
-                with open(f"{save_to}/peptides_over_threshold.txt", "w") as f:
-                    for peptide in self.peptides_to_model:
-                        if peptide != self.primary_key:
-                            f.write(f"{peptide}\n")
-
         self.metadata = self._get_metadata(
             self.original_data.to_pandas(), self.peptides_to_model
         )
-
-        if save_to is not None:
-            # create metadata and save it if necessary
-            if self.save_metadata:
-                self.metadata.save_to_json(f"{self.save_to}/metadata.json")
 
         self.sdv_synthesizer = sdv_synthesizer(metadata=self.metadata, *args, **kwargs)
         self._load_constraints()
 
     def sample(
-        self,
-        num_samples: int,
-        batch_size: int | None = None,
-    ):
-        "The batch size defaults to `num_rows`, if None."
+            self,
+            num_samples: int,
+            batch_size: int | None = None,
+    ) -> pd.DataFrame:
+        """
+        sample a synthetic dataset
+        Args:
+            num_samples: number of synthetic patients
+            batch_size: generate data in batches of this size to speed up the process
+
+        Returns: dataframe containing the synthetic dataset
+        """
         return self.sdv_synthesizer.sample(num_samples, batch_size=batch_size)
 
     def fit(self):
@@ -97,9 +73,15 @@ class HFSynthesizer(Synthesizer):
         print("Model fitted.")
 
     def _get_metadata(
-        self, dataset: pl.DataFrame, peptide_columns: list[str]
+            self, dataset: pl.DataFrame, peptide_columns: list[str]
     ) -> sdv.metadata.SingleTableMetadata:
-
+        """
+        generate metadata for all columns so the synthesizer knows types of each variable
+        Args:
+            dataset: dataframe containing joined peptides and clinical data
+            peptide_columns: list of peptide columns
+        Returns: metadata object
+        """
         metadata = sdv.metadata.SingleTableMetadata()
         metadata.detect_from_dataframe(dataset)
 
@@ -111,12 +93,42 @@ class HFSynthesizer(Synthesizer):
 
         return metadata
 
+    @abstractmethod
     def _load_constraints(self):
-        """Loads given constraints defined in class
-        from the src/generation/constraints.py."""
+        pass
 
-        # ----- For HF, systolic blood pressure must be greater than diastolic -----
 
+class HFSynthesizer(Synthesizer):
+    def __init__(
+            self,
+            original_data: pl.DataFrame,
+            primary_key: str,
+            peptides_to_model: list,
+            sdv_synthesizer: Type[
+                sdv.single_table.base.BaseSingleTableSynthesizer
+            ] = CustomGaussianCopulaSynthesizer,
+            random_seed: int | None = None,
+            *args,
+            **kwargs,
+    ):
+        """
+        Synthesizer for HF data with custom
+        """
+        super(HFSynthesizer, self).__init__(
+            original_data=original_data,
+            primary_key=primary_key,
+            peptides_to_model=peptides_to_model,
+            sdv_synthesizer=sdv_synthesizer,
+            random_seed=random_seed,
+            *args,
+            **kwargs
+        )
+
+    def _load_constraints(self):
+        """
+        add constraints which enforce known rules data should adhere to
+        i.e. diastolic blood pressure is always lower than systolic blood pressure
+        """
         my_constraint = {
             "constraint_class": "Inequality",
             "constraint_parameters": {
