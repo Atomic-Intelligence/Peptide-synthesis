@@ -1,5 +1,6 @@
-from src.data.data_models import Data, Processor
 import polars as pl
+
+from src.data.data_models import Data, Processor
 
 
 class HFProcessorForSynthetization(Processor):
@@ -14,8 +15,12 @@ class HFProcessorForSynthetization(Processor):
         data = self._preprocess_peptide_data(data)
         return data
 
+    def postprocess_data(self, data: Data) -> Data:
+        # todo: check if this needs implementing
+        return data
+
     @staticmethod
-    def _preprocess_clinical_data(self, data: Data) -> Data:
+    def _preprocess_clinical_data(data: Data) -> Data:
         data.clinical = data.clinical.select(
             pl.col(col) for col in data.clinical.columns if col != ""
         )
@@ -29,9 +34,8 @@ class HFProcessorForSynthetization(Processor):
         return data
 
     def get_peptides_for_modelling(
-        self, data: pl.DataFrame, missing_threshold: float
+            self, data: pl.DataFrame, missing_threshold: float
     ) -> tuple[pl.DataFrame, list[str]]:
-
         # Replace 0 with None
         data = data.with_columns(
             [
@@ -54,7 +58,7 @@ class HFProcessorForSynthetization(Processor):
 
         other_columns = set(data.columns) - set(columns_to_model)
 
-        print(f"{len(columns_to_model)-1} columns will be synthesized using advanced methods!")
+        print(f"{len(columns_to_model) - 1} columns will be synthesized using advanced methods!")
         print(f"{len(other_columns)} will be approximated using the mean as there is not enough data!")
 
         # Select columns to model
