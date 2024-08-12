@@ -5,6 +5,9 @@ import polars as pl
 import sdv
 import sdv.single_table.base
 
+import numpy as np
+import torch
+
 from src.modeling.custom_copula_synthesizer import CustomGaussianCopulaSynthesizer
 
 
@@ -22,7 +25,9 @@ class Synthesizer(ABC):
         pass
 
     @abstractmethod
-    def _get_metadata(self, dataset: pl.DataFrame, peptide_columns: pl.Series) -> sdv.metadata.SingleTableMetadata:
+    def _get_metadata(
+        self, dataset: pl.DataFrame, peptide_columns: pl.Series
+    ) -> sdv.metadata.SingleTableMetadata:
         pass
 
 
@@ -39,7 +44,10 @@ class HFSynthesizer(Synthesizer):
         save_to: str | None = None,
         save_metadata: bool = False,
         save_peptides_over_threshold: bool = False,
-        sdv_synthesizer: Type[sdv.single_table.base.BaseSingleTableSynthesizer] = CustomGaussianCopulaSynthesizer,
+        sdv_synthesizer: Type[
+            sdv.single_table.base.BaseSingleTableSynthesizer
+        ] = CustomGaussianCopulaSynthesizer,
+        random_seed: int | None = None,
         *args,
         **kwargs,
     ):
@@ -49,6 +57,11 @@ class HFSynthesizer(Synthesizer):
         self.peptides_to_model = peptides_to_model
         self.save_metadata = save_metadata
         self.save_peptides_over_threshold = save_peptides_over_threshold
+        self.random_seed = random_seed
+
+        if self.random_seed is not None:
+            np.random.seed(self.random_seed)
+            torch.manual_seed(self.random_seed)
 
         if save_to is not None:
             if self.save_peptides_over_threshold:
