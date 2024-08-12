@@ -1,3 +1,4 @@
+from pathlib import Path
 from tqdm import tqdm
 import polars as pl
 import pandas as pd
@@ -24,9 +25,7 @@ class HFProcessorForSynthetization(Processor):
         data: Data,
         remaining_peptides: list[str],
         synthetic_data: pl.DataFrame,
-        save_to: str | None = None,
     ) -> Data:
-        """If `save_to` parameter is None, data will be saved to current working directory."""
         remaining_columns = {}
 
         original_peptides = data.peptides.to_pandas()
@@ -63,24 +62,7 @@ class HFProcessorForSynthetization(Processor):
             ]
         ]
 
-        if save_to is not None:
-            synthetic_data_clinical.to_csv(
-                f"{save_to}/synthetic_data_clinical.csv", index=False
-            )
-            synthetic_data_peptides.to_csv(
-                f"{save_to}/synthetic_data_peptides.csv", index=False
-            )
-
-        else:
-            save_to = os.getcwd()
-            synthetic_data_clinical.to_csv(
-                f"{save_to}/synthetic_data_clinical.csv", index=False
-            )
-            synthetic_data_peptides.to_csv(
-                f"{save_to}/synthetic_data_peptides.csv", index=False
-            )
-
-        print(f"Data postprocessed and saved to {save_to}.")
+        print(f"Data postprocessed.")
 
         return Data(
             clinical=pl.from_pandas(synthetic_data_clinical),
@@ -100,3 +82,41 @@ class HFProcessorForSynthetization(Processor):
             (pl.col(self.primary_key) / 1000).cast(pl.Int64)
         )
         return data
+
+    def merge_and_save(
+        self,
+        clinical_data_0: pl.DataFrame,
+        clinical_data_1: pl.DataFrame,
+        peptides_data_0: pl.DataFrame,
+        peptides_data_1: pl.DataFrame,
+        save_to: Path | None = None,
+    ) -> None:
+        """If `save_to` parameter is None, data will be saved to current working directory."""
+
+        clinical_data = pl.concat([clinical_data_0, clinical_data_1]).transpose(
+            include_header=True
+        )
+
+        peptides_data = pl.concat([peptides_data_0, peptides_data_1]).transpose(
+            include_header=True
+        )
+
+        if save_to is not None:
+            Path.mkdir(save_to, exist_ok=True)
+            clinical_data.write_csv(
+                f"{save_to}/synthetic_data_clinical.csv", include_header=False
+            )
+            peptides_data.write_csv(
+                f"{save_to}/synthetic_data_peptides.csv", include_header=False
+            )
+
+        else:
+            save_to = os.getcwd()
+            clinical_data.write_csv(
+                f"{save_to}/synthetic_data_clinical.csv", include_header=False
+            )
+            peptides_data.write_csv(
+                f"{save_to}/synthetic_data_peptides.csv", include_header=False
+            )
+
+        print(f"Data saved to: {save_to}.")
