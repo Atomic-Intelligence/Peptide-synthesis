@@ -16,24 +16,20 @@ class Data(BaseModel):
 
 class Processor(ABC):
     def __init__(
-        self,
-        primary_key: str,
+            self,
+            primary_key: str,
     ):
         self.primary_key = primary_key
 
     @abstractmethod
-    def preprocess_data(self, data: Data, *args) -> Data:
+    def preprocess_data(self, data: Data) -> Data:
         pass
 
-    @abstractmethod
-    def postprocess_data(self, data: Data, *args) -> Data:
-        pass
-
-    def postprocess_after_generation(
-        self,
-        data: Data,
-        remaining_peptides: list[str],
-        synthetic_data: pl.DataFrame,
+    def postprocess_data(
+            self,
+            data: Data,
+            remaining_peptides: list[str],
+            synthetic_data: pl.DataFrame,
     ) -> Data:
         remaining_columns = {}
 
@@ -79,7 +75,7 @@ class Processor(ABC):
         )
 
     def get_peptides_for_modelling(
-        self, data: pl.DataFrame, missing_threshold: float
+            self, data: pl.DataFrame, missing_threshold: float
     ) -> tuple[pl.DataFrame, list[str]]:
         # Replace 0 with None
         data = data.with_columns(
