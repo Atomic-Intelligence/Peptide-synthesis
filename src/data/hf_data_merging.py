@@ -3,7 +3,15 @@ import os
 import pandas as pd
 
 
-def concatenate_tables_from_files(path: str, filenames: list[str]):
+def concatenate_tables_from_files(path: str, filenames: list[str]) -> pd.DataFrame:
+    """
+    concatenate multiple excel tables into a single resulting pandas dataframe
+    Args:
+        path: path to the root directory containing the Excel tables
+        filenames: filenames of the Excel tables
+
+    Returns: dataframe containing the concatenated tables
+    """
     tables = []
     for i in range(len(filenames)):
         filename_path = os.path.join(path, (filenames[i] + ".xlsx"))

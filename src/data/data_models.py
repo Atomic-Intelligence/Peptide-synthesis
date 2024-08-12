@@ -8,6 +8,9 @@ from tqdm import tqdm
 
 
 class Data(BaseModel):
+    """
+    data structure containing both clinical and peptide data in polars dataframes
+    """
     clinical: pl.DataFrame
     peptides: pl.DataFrame
 
@@ -20,6 +23,11 @@ class Processor(ABC):
             self,
             primary_key: str,
     ):
+        """
+        Abstract processor class for general clinical and peptide data manipulation
+        Args:
+            primary_key: column name of the primary key column
+        """
         self.primary_key = primary_key
 
     @abstractmethod
@@ -32,6 +40,16 @@ class Processor(ABC):
             remaining_peptides: list[str],
             synthetic_data: pl.DataFrame,
     ) -> Data:
+        """
+        postprocess synthesized data into final dataset
+        Args:
+            data: original data of real patients
+            remaining_peptides: peptides which were not modeled using copulas due to not enough examples
+            synthetic_data: result of the synthetic data generation using the copulas method
+
+        Returns: synthetic dataset split into clinical and peptide tables
+
+        """
         remaining_columns = {}
 
         original_peptides = data.peptides.to_pandas()
@@ -78,6 +96,15 @@ class Processor(ABC):
     def get_peptides_for_modelling(
             self, data: pl.DataFrame, missing_threshold: float
     ) -> tuple[pl.DataFrame, list[str]]:
+        """
+        filters peptides which pass the frequency threshold needed to apply copulas to them
+        Args:
+            data: peptide data in a polars dataframe
+            missing_threshold: if the missing data percentage goes above this value, copulas are not used
+
+        Returns: polars dataframe of peptides for copula fitting and list of the remaining column names
+
+        """
         # Replace 0 with None
         data = data.with_columns(
             [

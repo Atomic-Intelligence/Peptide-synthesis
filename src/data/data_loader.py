@@ -13,6 +13,16 @@ class DataLoader:
             processor: Processor | None = None,
             filter_conditions: dict | None = None
     ):
+        """
+        dataloader class used to parse clinical and peptide data
+        Args:
+            clinical_data_path: path to clinical data
+            peptides_data_path: path to peptide data
+            primary_key: column name of primary key column
+            number_of_samples: number of samples to use, if None all data is used
+            processor: Processor object to use for data processing
+            filter_conditions: conditions to use for filtering data
+        """
         self.clinical_data_path = clinical_data_path
         self.peptides_data_path = peptides_data_path
         self.processor = processor
@@ -49,7 +59,6 @@ class DataLoader:
 
         Parameters:
         - df (pl.DataFrame): The DataFrame to apply filters to.
-        - conditions (dict): A dictionary where keys are column names and values are filter criteria.
 
         Returns:
         - pl.DataFrame: The filtered DataFrame.
