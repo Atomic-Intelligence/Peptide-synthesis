@@ -1,9 +1,11 @@
-from sdv.single_table import *
-import sdv.single_table.base
+from abc import ABC, abstractmethod
+from typing import Type
+
 import polars as pl
 import sdv
+import sdv.single_table.base
+
 from src.modeling.custom_copula_synthesizer import CustomGaussianCopulaSynthesizer
-from abc import ABC, abstractmethod
 
 
 class Synthesizer(ABC):
@@ -37,7 +39,7 @@ class HFSynthesizer(Synthesizer):
         save_to: str | None = None,
         save_metadata: bool = False,
         save_peptides_over_threshold: bool = False,
-        sdv_synthesizer: sdv.single_table.base.BaseSingleTableSynthesizer = CustomGaussianCopulaSynthesizer,
+        sdv_synthesizer: Type[sdv.single_table.base.BaseSingleTableSynthesizer] = CustomGaussianCopulaSynthesizer,
         *args,
         **kwargs,
     ):
@@ -50,7 +52,7 @@ class HFSynthesizer(Synthesizer):
 
         if save_to is not None:
             if self.save_peptides_over_threshold:
-                # Save peptides that are used with copula approact to txt file
+                # Save peptides that are used with copula approach to txt file
                 with open(f"{save_to}/peptides_over_threshold.txt", "w") as f:
                     for peptide in self.peptides_to_model:
                         if peptide != self.primary_key:
@@ -82,7 +84,7 @@ class HFSynthesizer(Synthesizer):
         print("Model fitted.")
 
     def _get_metadata(
-        self, dataset: pl.DataFrame, peptide_columns: pl.Series
+        self, dataset: pl.DataFrame, peptide_columns: list[str]
     ) -> sdv.metadata.SingleTableMetadata:
 
         metadata = sdv.metadata.SingleTableMetadata()
