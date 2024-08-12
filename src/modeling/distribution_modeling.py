@@ -1,11 +1,10 @@
-import matplotlib.pyplot as plt
-from fitter import Fitter
-from enum import Enum
-from tqdm import tqdm
-import polars as pl
-import random
 import json
 import os
+from enum import Enum
+
+import polars as pl
+from fitter import Fitter
+from tqdm import tqdm
 
 
 class FitMethod(str, Enum):

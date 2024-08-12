@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
+
+import numpy as np
+import pandas as pd
+import polars as pl
 from pydantic import BaseModel
 from tqdm import tqdm
-import polars as pl
-import pandas as pd
-import numpy as np
 
 
 class Data(BaseModel):

@@ -1,5 +1,6 @@
-import pandas as pd
 import os
+
+import pandas as pd
 
 
 def concatenate_tables_from_files(path: str, filenames: list[str]):
