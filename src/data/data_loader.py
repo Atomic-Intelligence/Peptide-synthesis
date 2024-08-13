@@ -91,7 +91,7 @@ class DataLoader:
         return df
 
     @staticmethod
-    def _apply_operator(self, df: pl.DataFrame, column: str, operator: str, value) -> pl.DataFrame:
+    def _apply_operator(df: pl.DataFrame, column: str, operator: str, value) -> pl.DataFrame:
         """
         Helper method to apply an operator-based condition to a DataFrame column.
         """
