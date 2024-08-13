@@ -42,18 +42,17 @@ def data_synthesis(
             processor,
             filter_dict
         )
-        print("loading data")
+        print("Loading data...")
         data = loader.get_data()
         # find peptides that have at least 30% non-zero values
-        print("get peptides for modelling")
+        print("Getting peptides for modelling...")
         peptides_to_model, low_count_peptides = processor.get_peptides_for_modelling(
             data.peptides,
             missing_threshold
         )
-        print("pept kas", peptides_to_model[primary_key].dtype)
 
         # estimate marginal distributions
-        print("estimate marginal distributions")
+        print("Estimating marginal distributions...")
         # peptides_to_model = peptides_to_model.select(peptides_to_model.columns[:5])
         distributions = distribution_estimator.estimate(peptides_to_model)
         for clinical_column in clinical_columns_to_estimate:
