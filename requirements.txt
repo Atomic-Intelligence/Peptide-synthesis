@@ -17,3 +17,4 @@ kaleido
 torch~=2.4.0
 scipy~=1.14.0
 PyYAML~=6.0.2
+openpyxl
