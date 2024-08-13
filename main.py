@@ -48,6 +48,7 @@ def main():
     batch_size = synthesis.get('batch_size')
     n_of_synth_samples = synthesis.get('number_of_synth_samples')
     clinical_columns_to_estimate = synthesis.get('clinical_columns_to_estimate')
+    constraints = synthesis.get('constraints')
 
     processor = HFProcessorForSynthetization(primary_key=primary_key)
 
@@ -63,10 +64,11 @@ def main():
             filters,
             n_of_synth_samples,
             batch_size,
+            constraints,
             processor,
             random_seed,
             clinical_columns_to_estimate,
-            n_of_original_samples
+            n_of_original_samples,
         )
 
 
