@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import polars as pl
 from src.data.data_loader import DataLoader
 from src.data.data_models import Processor
@@ -57,7 +59,7 @@ def data_synthesis(
 
         # initialize synthesizer
         peptides_to_model_names = [
-            col for col in peptides_to_model.columns.tolist() if col != primary_key
+            col for col in peptides_to_model.columns if col != primary_key
         ]
 
         synthesizer = HFSynthesizer(
@@ -87,6 +89,6 @@ def data_synthesis(
 
     clinical_data_list = [data.clinical for data in synth_df]
     peptides_data_list = [data.peptides for data in synth_df]
-    merge_and_save(clinical_data_list, peptides_data_list, save_path)
+    merge_and_save(clinical_data_list, peptides_data_list, Path(save_path))
 
 

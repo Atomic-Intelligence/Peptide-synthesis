@@ -3,6 +3,7 @@ from src.data.hf_data_merging import merge_hf_data
 from data_synthesis import data_synthesis
 from src.data.data_processing import HFProcessorForSynthetization
 
+
 def load_config(config_file='configuration.yaml'):
     """
     Load configuration from a YAML file.
