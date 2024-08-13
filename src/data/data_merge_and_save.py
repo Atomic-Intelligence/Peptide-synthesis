@@ -6,6 +6,7 @@ import os
 def merge_and_save(
     clinical_data_list: list[pl.DataFrame],
     peptides_data_list: list[pl.DataFrame],
+    primary_key: str,
     save_to: Path | None = None,
 ) -> None:
     """
@@ -22,7 +23,14 @@ def merge_and_save(
         raise ValueError("Length of clinical and peptides data lists must be equal.")
 
     clinical_data_merged = pl.concat(clinical_data_list)
+    n = clinical_data_merged.shape[0]
+    clinical_data_merged = clinical_data_merged.with_columns(
+        pl.arange(1, n + 1).alias(primary_key)
+    )
     peptides_data_merged = pl.concat(peptides_data_list).fill_null(0.0)
+    peptides_data_merged = peptides_data_merged.with_columns(
+        pl.arange(1, n + 1).alias(primary_key)
+    )
 
     Path.mkdir(save_to, exist_ok=True) if save_to is not None else os.getcwd()
 
