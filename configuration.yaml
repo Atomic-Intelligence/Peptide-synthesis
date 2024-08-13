@@ -1,7 +1,7 @@
 initial_data_handling:
   inital_data_merging: True
-  root_dir_path: ""
-  save_dir_path: ""
+  root_dir_path: "../prostrat-analysis/data/"
+  save_dir_path: "~/Peptide-synthesis/saved"
 
 
 synthesis:
@@ -13,14 +13,11 @@ synthesis:
         - "="
         - 0
   peptide_data_paths:
-    - ""
-    - ""
+    - "~/Peptide-synthesis/saved/hf_peptides_data.csv"
   clinical_data_paths:
-    - ""
-    - ""
+    - "~/Peptide-synthesis/saved/hf_clinical_data.csv"
   save_paths:
-    - ""
-    - ""
+    - "~/Peptide-synthesis/output"
   missing_threshold: 0.7
   primary_key: 'idAuswertung'
   number_of_original_samples: None
