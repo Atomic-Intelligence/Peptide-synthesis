@@ -1,0 +1,35 @@
+initial_data_handling:
+  inital_data_merging: True
+  root_dir_path: ""
+  save_dir_path: ""
+
+
+synthesis:
+  filtering:
+    - Kidney_disease:
+        - "="
+        - 1
+    - Kidney_disease:
+        - "="
+        - 0
+  peptide_data_paths:
+    - ""
+    - ""
+  clinical_data_paths:
+    - ""
+    - ""
+  save_paths:
+    - ""
+    - ""
+  missing_threshold: 0.7
+  primary_key: 'idAuswertung'
+  number_of_original_samples: None
+  distribution_list:
+    - 'lognorm'
+    - 'norm'
+  fit_distribution_method: "sumsquare_error"
+  random_seed: 42
+  batch_size: 100
+  number_of_synth_samples: 500
+  clinical_columns_to_estimate:
+    - "GFR_CKD_EPI_M"

@@ -31,8 +31,7 @@ class DistributionEstimator:
     def __init__(
         self,
         distribution_list: list[str],
-        peptides_to_model: pl.DataFrame | None = None,
-        method: FitMethod = FitMethod.sumsquare,
+        method: str = FitMethod.sumsquare,
     ):
         """
         Used for estimating distributions to use in the gaussian copula for each peptide in the dataset.
@@ -43,7 +42,6 @@ class DistributionEstimator:
             method: metric which should be used to choose the best fitting distribution
         """
         self.distribution_list = distribution_list
-        self.peptides_df = peptides_to_model
         self.method = method
 
         self.distributions = None
@@ -61,16 +59,16 @@ class DistributionEstimator:
                     f"Invalid distribution '{distribution}'. Must be one of: {', '.join(Distributions.__members__.values())}."
                 )
 
-    def estimate(self) -> dict[str, str]:
+    def estimate(self, peptides_df) -> dict[str, str]:
         """
         Estimate the best distributions for all peptides
         Returns: dictionary mapping the peptide column name to the distribution name
         """
         distributions = {}
 
-        for peptide in tqdm(self.peptides_df.columns, desc="Fitting Distributions"):
+        for peptide in tqdm(peptides_df.columns, desc="Fitting Distributions"):
             distributions[peptide] = self.estimate_single_column_distribution(
-                self.peptides_df[peptide],
+                peptides_df[peptide],
             )
         self.distributions = distributions
         return distributions
