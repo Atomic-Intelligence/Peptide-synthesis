@@ -51,7 +51,7 @@ class DataLoader:
 
         except Exception as e:
             print(e, "\n")
-            raise ValueError(f"Data is not loaded correctly!")
+            raise ValueError("Data is not loaded correctly!")
 
     def _apply_filter_conditions(self, df: pl.DataFrame) -> pl.DataFrame:
         """

@@ -1,7 +1,7 @@
 initial_data_handling:
   inital_data_merging: False
-  root_dir_path: "/home/eanicic/Peptide-synthesis/peptides/"
-  save_dir_path: "/home/eanicic/Peptide-synthesis/peptides_input"
+  root_dir_path: ""
+  save_dir_path: "resources/"
 
 
 synthesis:
@@ -13,13 +13,13 @@ synthesis:
         - "=="
         - 0
   peptide_data_paths:
-    - "/home/eanicic/Peptide-synthesis/peptides_input/hf_peptides_data.csv"
+    - "resources/hf_peptides_data.csv"
   clinical_data_paths:
-    - "/home/eanicic/Peptide-synthesis/peptides_input/hf_clinical_data.csv"
+    - "resources/hf_clinical_data.csv"
   save_paths:
-    - "/home/eanicic/Peptide-synthesis/output_dir"
+    - "output/"
   missing_threshold: 0.7
-  primary_key: 'idAuswertung'
+  primary_key: 'Patient ID'
   number_of_original_samples: Null
   distribution_list:
     - 'lognorm'
@@ -27,6 +27,6 @@ synthesis:
   fit_distribution_method: "sumsquare_error"
   random_seed: 42
   batch_size: 100
-  number_of_synth_samples: 500
+  number_of_synth_samples: 15
   clinical_columns_to_estimate:
-    - "GFR_CKD_EPI_M"
+    - "BMI"

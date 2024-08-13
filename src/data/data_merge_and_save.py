@@ -21,16 +21,16 @@ def merge_and_save(
     if len(clinical_data_list) != len(peptides_data_list):
         raise ValueError("Length of clinical and peptides data lists must be equal.")
 
-    clinical_data_merged = pl.concat(clinical_data_list).transpose(include_header=True)
-    peptides_data_merged = pl.concat(peptides_data_list).transpose(include_header=True)
+    clinical_data_merged = pl.concat(clinical_data_list)
+    peptides_data_merged = pl.concat(peptides_data_list).fill_null(0.0)
 
     Path.mkdir(save_to, exist_ok=True) if save_to is not None else os.getcwd()
 
     clinical_data_merged.write_csv(
-        Path(save_to, "synthetic_data_clinical.csv"), include_header=False
+        Path(save_to, "synthetic_data_clinical.csv"), include_header=True
     )
     peptides_data_merged.write_csv(
-        Path(save_to, "synthetic_data_peptides.csv"), include_header=False
+        Path(save_to, "synthetic_data_peptides.csv"), include_header=True
     )
 
     print(f"Data saved to: {save_to}.")

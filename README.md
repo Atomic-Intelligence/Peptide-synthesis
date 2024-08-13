@@ -25,7 +25,8 @@ pip install -r requirements.txt
    git clone https://github.com/Atomic-Intelligence/Peptide-synthesis.git
    cd Peptide-synthesis
    ```
-2. Set up the configuration file `configuration.yaml` to fit your experiment. This is an example configuration for reproducing our research.
+2. Set up a dataset containing peptide and clinical data. The `resources` directory contains an example of a valid dataset on which the pipeline can be run.
+3. Set up the configuration file `configuration.yaml` to fit your experiment. This is an example configuration for reproducing our research.
    ```yaml
    initial_data_handling:
       inital_data_merging: True  #  True if merging of multiple Excel sheets is needed
