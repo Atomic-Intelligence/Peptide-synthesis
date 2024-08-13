@@ -43,7 +43,6 @@ class HFProcessorForSynthetization(Processor):
             data: Data object containing peptide data as well as clinical data
         Returns: preprocessed data
         """
-        data.peptides = data.peptides.rename({"": self.primary_key})
         data.peptides = data.peptides.with_columns(
             (pl.col(self.primary_key) / 1000).cast(pl.Int64)
         )
