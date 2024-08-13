@@ -25,9 +25,42 @@ pip install -r requirements.txt
    git clone https://github.com/Atomic-Intelligence/Peptide-synthesis.git
    cd Peptide-synthesis
    ```
-2. Set up the configuration file `configuration.yaml` to fit your experiment
+2. Set up the configuration file `configuration.yaml` to fit your experiment. This is an example configuration for reproducing our research.
    ```yaml
-   a: b tu cemo dodat primjer kako izgleda yamlica
+   initial_data_handling:
+      inital_data_merging: True  #  True if merging of multiple Excel sheets is needed
+      root_dir_path: ""  #  directory containing the real dataset
+      save_dir_path: ""  #  directory where synthetic data will be saved
+   
+   synthesis:
+      filtering:  #  filters for each group of patients which should be modeed separately
+         - Kidney_disease:  #  first group are patients which have kidney disease
+             - "="
+             - 1
+         - Kidney_disease:  # second group are patients which do not have kidney disease
+             - "="
+             - 0
+      peptide_data_paths:   # paths to peptide data for each group
+        - ""
+        - ""
+      clinical_data_paths:  # paths to clinical data for each groups
+        - ""
+        - ""
+      save_paths:  #  paths where results will be saved
+        - ""
+        - ""
+      missing_threshold: 0.7  #  peptides with a percentage of missing values over this are not modeled 
+      primary_key: 'idAuswertung'  #  primary key for the dataset
+      number_of_original_samples: None  #  if you want to use just a subset of original patients, specify the number here
+      distribution_list:  #  available distributions
+        - 'lognorm'
+        - 'norm'
+      fit_distribution_method: "sumsquare_error"  #  method to choose best fitting distribution for each variable
+      random_seed: 42  #  random seed if you want to fix the experiment
+      batch_size: 100  #  batch size for faster sampling
+      number_of_synth_samples: 500  #  number of synthetic patients to generate
+      clinical_columns_to_estimate:  #  clinical variables for which distribution should be estimated
+        - "GFR_CKD_EPI_M"
     ```
 3. Run the main script using the Python environment where the requirements have been installed:
    ```bash
