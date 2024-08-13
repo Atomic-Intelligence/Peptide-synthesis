@@ -62,6 +62,12 @@ pip install -r requirements.txt
       number_of_synth_samples: 500  #  number of synthetic patients to generate
       clinical_columns_to_estimate:  #  clinical variables for which distribution should be estimated
         - "GFR_CKD_EPI_M"
+      constraints:  # list of rule based constraints for your data
+        - constraint_class: "Inequality"
+          constraint_parameters:
+            low_column_name: "Blutdruck, diastolischM"
+            high_column_name: "Blutdruck, systolischM"
+            strict_boundaries: True
     ```
 3. Run the main script using the Python environment where the requirements have been installed:
    ```bash

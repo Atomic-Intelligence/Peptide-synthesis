@@ -1,10 +1,11 @@
 from pathlib import Path
+from typing import Any
 
 import polars as pl
 from src.data.data_loader import DataLoader
 from src.data.data_models import Processor
 from src.modeling.distribution_modeling import DistributionEstimator
-from src.modeling.synthetization import HFSynthesizer
+from src.modeling.synthetization import Synthesizer
 from src.modeling.custom_copula_synthesizer import CustomGaussianCopulaSynthesizer
 from src.data.data_merge_and_save import merge_and_save
 
@@ -20,6 +21,7 @@ def data_synthesis(
         filters: list[dict],
         number_of_synth_samples: int,
         batch_size: int,
+        constraints: list[dict[str, Any]],
         processor: Processor | None = None,
         random_seed: int | None = None,
         clinical_columns_to_estimate: list[str] | None = None,
@@ -67,13 +69,14 @@ def data_synthesis(
             col for col in peptides_to_model.columns if col != primary_key
         ]
 
-        synthesizer = HFSynthesizer(
+        synthesizer = Synthesizer(
             original_data=original_data,
             primary_key=primary_key,
             peptides_to_model=peptides_to_model_names,
             sdv_synthesizer=CustomGaussianCopulaSynthesizer,
             random_seed=random_seed,
-            numerical_distributions=distributions
+            numerical_distributions=distributions,
+            constraints=constraints
         )
 
         synthesizer.fit()

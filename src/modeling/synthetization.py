@@ -1,5 +1,4 @@
-from abc import ABC, abstractmethod
-from typing import Type
+from typing import Type, Any
 
 import pandas as pd
 import polars as pl
@@ -12,12 +11,13 @@ import torch
 from src.modeling.custom_copula_synthesizer import CustomGaussianCopulaSynthesizer
 
 
-class Synthesizer(ABC):
+class Synthesizer:
     def __init__(
             self,
             original_data: pl.DataFrame,
             primary_key: str,
             peptides_to_model: list,
+            constraints: list[dict[str, Any]],
             sdv_synthesizer: Type[
                 sdv.single_table.base.BaseSingleTableSynthesizer
             ] = CustomGaussianCopulaSynthesizer,
@@ -33,6 +33,7 @@ class Synthesizer(ABC):
             peptides_to_model: peptides which should be modeled using the copula approach
             sdv_synthesizer: class which should be instantiated for the synthetic data model
             random_seed: seed for random number generator to be able to reproduce experiments
+            constraints: deterministic constraints for columns
             *args: extra args for sdv_synthesizer
             **kwargs: extra kwargs for sdv_synthesizer
         """
@@ -40,6 +41,7 @@ class Synthesizer(ABC):
         self.primary_key = primary_key
         self.peptides_to_model = peptides_to_model
         self.random_seed = random_seed
+        self.constraints = constraints
 
         if self.random_seed is not None:
             np.random.seed(self.random_seed)
@@ -93,49 +95,10 @@ class Synthesizer(ABC):
 
         return metadata
 
-    @abstractmethod
-    def _load_constraints(self):
-        pass
-
-
-class HFSynthesizer(Synthesizer):
-    def __init__(
-            self,
-            original_data: pl.DataFrame,
-            primary_key: str,
-            peptides_to_model: list,
-            sdv_synthesizer: Type[
-                sdv.single_table.base.BaseSingleTableSynthesizer
-            ] = CustomGaussianCopulaSynthesizer,
-            random_seed: int | None = None,
-            *args,
-            **kwargs,
-    ):
-        """
-        Synthesizer for HF data with custom
-        """
-        super(HFSynthesizer, self).__init__(
-            original_data=original_data,
-            primary_key=primary_key,
-            peptides_to_model=peptides_to_model,
-            sdv_synthesizer=sdv_synthesizer,
-            random_seed=random_seed,
-            *args,
-            **kwargs
-        )
-
     def _load_constraints(self):
         """
         add constraints which enforce known rules data should adhere to
         i.e. diastolic blood pressure is always lower than systolic blood pressure
         """
-        my_constraint = {
-            "constraint_class": "Inequality",
-            "constraint_parameters": {
-                "low_column_name": "Blutdruck, diastolischM",
-                "high_column_name": "Blutdruck, systolischM",
-                "strict_boundaries": True,
-            },
-        }
 
-        self.sdv_synthesizer.add_constraints(constraints=[my_constraint])
+        self.sdv_synthesizer.add_constraints(constraints=self.constraints)
