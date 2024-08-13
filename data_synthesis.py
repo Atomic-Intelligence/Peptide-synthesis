@@ -44,7 +44,6 @@ def data_synthesis(
         data = loader.get_data()
         # find peptides that have at least 30% non-zero values
         print("get peptides for modelling")
-        data.peptides = data.peptides.select(data.peptides.columns[:5])
         peptides_to_model, low_count_peptides = processor.get_peptides_for_modelling(
             data.peptides,
             missing_threshold
