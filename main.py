@@ -2,7 +2,7 @@ import yaml
 from src.data.hf_data_merging import merge_hf_data
 from data_synthesis import data_synthesis
 from src.data.data_processing import HFProcessorForSynthetization
-
+from src.modeling.synthetization import HFSynthesizer
 
 def load_config(config_file='configuration.yaml'):
     """
@@ -63,6 +63,7 @@ def main():
             filters,
             n_of_synth_samples,
             batch_size,
+            HFSynthesizer,
             processor,
             random_seed,
             clinical_columns_to_estimate,
