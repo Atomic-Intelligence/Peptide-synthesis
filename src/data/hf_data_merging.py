@@ -46,15 +46,17 @@ def merge_hf_data(root_dir_path: str, save_dir_path: str):
         clin_data = pd.read_excel(excel_data, sheet_name="clin.data")
 
         # Process HF clinical data
+        print("HF clinical data processing and saving")
         hf_clin_data = clin_data[clin_data["HF.event"] == 1].reset_index(drop=True)
         hf_clin_data = hf_clin_data.drop(["HF.event", "CAD.event"], axis=1)
 
         # save HF clinical data
-        save_dir_path = Path.mkdir(save_dir_path, exist_ok=True)
+        Path(save_dir_path).mkdir(exist_ok=True, parents=True)
         hf_save_path = os.path.join(save_dir_path, "hf_clinical_data.csv")
         hf_clin_data.to_csv(hf_save_path)
 
         # Process HF peptide data
+        print("HF peptide data processing and saving")
         hf_filenames = filenames_data[filenames_data["Group"] == "HF"][
             "File name"
         ].unique()
@@ -69,6 +71,7 @@ def merge_hf_data(root_dir_path: str, save_dir_path: str):
         df_reset.to_csv(hf_peptides_path)
 
         # Process no-event clinical data
+        print("no-event clinical data processing and saving")
         no_event_clin_data = clin_data[
             (clin_data["CAD.event"] == 0) & (clin_data["HF.event"] == 0)
         ].reset_index(drop=True)
@@ -81,6 +84,7 @@ def merge_hf_data(root_dir_path: str, save_dir_path: str):
         no_event_clin_data.to_csv(no_event_clinical_path)
 
         # Process no-event peptide data
+        print("no-event peptide data processing and saving")
         no_event_filenames = filenames_data[
             filenames_data["Group"].isin(
                 ["no_event_1", "no_event_2", "no_event_3", "no_event_4", "no_event_5"]

@@ -1,29 +1,26 @@
 initial_data_handling:
-  inital_data_merging: True
-  root_dir_path: ""
-  save_dir_path: ""
+  inital_data_merging: False
+  root_dir_path: "/home/eanicic/Peptide-synthesis/peptides/"
+  save_dir_path: "/home/eanicic/Peptide-synthesis/peptides_input"
 
 
 synthesis:
   filtering:
-    - Kidney_disease:
-        - "="
+    - "Kidney disease":
+        - "=="
         - 1
-    - Kidney_disease:
-        - "="
+    - "Kidney disease":
+        - "=="
         - 0
   peptide_data_paths:
-    - ""
-    - ""
+    - "/home/eanicic/Peptide-synthesis/peptides_input/hf_peptides_data.csv"
   clinical_data_paths:
-    - ""
-    - ""
+    - "/home/eanicic/Peptide-synthesis/peptides_input/hf_clinical_data.csv"
   save_paths:
-    - ""
-    - ""
+    - "/home/eanicic/Peptide-synthesis/output_dir"
   missing_threshold: 0.7
   primary_key: 'idAuswertung'
-  number_of_original_samples: None
+  number_of_original_samples: Null
   distribution_list:
     - 'lognorm'
     - 'norm'
