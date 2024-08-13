@@ -24,7 +24,7 @@ def merge_and_save(
     clinical_data_merged = pl.concat(clinical_data_list).transpose(include_header=True)
     peptides_data_merged = pl.concat(peptides_data_list).transpose(include_header=True)
 
-    save_to = Path.mkdir(save_to, exist_ok=True) if save_to is not None else os.getcwd()
+    Path.mkdir(save_to, exist_ok=True) if save_to is not None else os.getcwd()
 
     clinical_data_merged.write_csv(
         Path(save_to, "synthetic_data_clinical.csv"), include_header=False

@@ -23,8 +23,7 @@ class HFProcessorForSynthetization(Processor):
         data = self._preprocess_peptide_data(data)
         return data
 
-    @staticmethod
-    def _preprocess_clinical_data(data: Data) -> Data:
+    def _preprocess_clinical_data(self, data: Data) -> Data:
         """
         clinical data preprocessing function
         Args:
@@ -34,6 +33,10 @@ class HFProcessorForSynthetization(Processor):
         data.clinical = data.clinical.select(
             pl.col(col) for col in data.clinical.columns if col != ""
         )
+        if self.primary_key in data.clinical.columns:
+            data.clinical = data.clinical.with_columns(
+                pl.col(self.primary_key).cast(pl.Int64)
+            )
         return data
 
     def _preprocess_peptide_data(self, data: Data) -> Data:
@@ -43,7 +46,7 @@ class HFProcessorForSynthetization(Processor):
             data: Data object containing peptide data as well as clinical data
         Returns: preprocessed data
         """
-        data.peptides = data.peptides.rename({"": self.primary_key})
+        data.peptides = data.peptides.select([pl.col(col) for col in data.peptides.columns if col != ""])
         data.peptides = data.peptides.with_columns(
             (pl.col(self.primary_key) / 1000).cast(pl.Int64)
         )
