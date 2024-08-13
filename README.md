@@ -64,5 +64,5 @@ pip install -r requirements.txt
     ```
 3. Run the main script using the Python environment where the requirements have been installed:
    ```bash
-    python3 synthesize.py
+    python3 main.py
    ```
