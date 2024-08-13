@@ -135,20 +135,28 @@ class Processor(ABC):
         )
 
         # Select columns to model
-        df = data.select(columns_to_model).with_columns(
-            [
-                (
-                    pl.when(pl.col(col).dtype in [pl.Int64, pl.Float64])
-                    .then(pl.col(col).cast(pl.Int64))
-                    .when(pl.col(col).dtype == pl.Utf8)
-                    .then(pl.col(col).cast(pl.Utf8))
-                    .otherwise(pl.col(col).cast(pl.Float64))
-                    .alias(col)
-                    if col == self.primary_key
-                    else pl.col(col).cast(pl.Float64)
+        original_types = {col: data[col].dtype for col in columns_to_model}
+        column_transformations = []
+        for col in columns_to_model:
+            dtype = original_types[col]
+
+            if col == self.primary_key:
+                # Handle primary key column based on its original type
+                if dtype in [pl.Float64, pl.Int64]:
+                    column_transformations.append(
+                        pl.col(col).cast(pl.Int64).alias(col)
+                    )
+                elif dtype == pl.Utf8:
+                    column_transformations.append(
+                        pl.col(col).cast(pl.Utf8).alias(col)
+                    )
+                else:
+                    raise ValueError(f"Unsupported type for primary key column '{col}': {dtype}")
+            else:
+                column_transformations.append(
+                    pl.col(col).cast(pl.Float64)
                 )
-                for col in columns_to_model
-            ]
-        )
+        # Apply transformations
+        df = data.select(columns_to_model).with_columns(column_transformations)
 
         return df, list(other_columns)

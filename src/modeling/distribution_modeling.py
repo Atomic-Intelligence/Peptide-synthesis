@@ -1,5 +1,4 @@
 from enum import Enum
-
 import polars as pl
 from fitter import Fitter
 from tqdm import tqdm
@@ -30,6 +29,7 @@ class Distributions(str, Enum):
 class DistributionEstimator:
     def __init__(
         self,
+        primary_key: str,
         distribution_list: list[str],
         method: str = FitMethod.sumsquare,
     ):
@@ -43,7 +43,7 @@ class DistributionEstimator:
         """
         self.distribution_list = distribution_list
         self.method = method
-
+        self.primary_key = primary_key
         self.distributions = None
 
         # Check if the provided method is a valid FitMethod
@@ -65,11 +65,12 @@ class DistributionEstimator:
         Returns: dictionary mapping the peptide column name to the distribution name
         """
         distributions = {}
-
+        peptides_df = peptides_df.fill_null(0)
         for peptide in tqdm(peptides_df.columns, desc="Fitting Distributions"):
-            distributions[peptide] = self.estimate_single_column_distribution(
-                peptides_df[peptide],
-            )
+            if peptide != self.primary_key:
+                distributions[peptide] = self.estimate_single_column_distribution(
+                    peptides_df[peptide],
+                )
         self.distributions = distributions
         return distributions
 

@@ -53,7 +53,7 @@ def merge_hf_data(root_dir_path: str, save_dir_path: str):
         # save HF clinical data
         Path(save_dir_path).mkdir(exist_ok=True, parents=True)
         hf_save_path = os.path.join(save_dir_path, "hf_clinical_data.csv")
-        hf_clin_data.to_csv(hf_save_path)
+        hf_clin_data.to_csv(hf_save_path, index=False)
 
         # Process HF peptide data
         print("HF peptide data processing and saving")
@@ -68,7 +68,7 @@ def merge_hf_data(root_dir_path: str, save_dir_path: str):
 
         # save HF peptide data
         hf_peptides_path = os.path.join(save_dir_path, "hf_peptides_data.csv")
-        df_reset.to_csv(hf_peptides_path)
+        df_reset.to_csv(hf_peptides_path, index=False)
 
         # Process no-event clinical data
         print("no-event clinical data processing and saving")
@@ -81,7 +81,7 @@ def merge_hf_data(root_dir_path: str, save_dir_path: str):
         no_event_clinical_path = os.path.join(
             save_dir_path, "no_event_clinical_data.csv"
         )
-        no_event_clin_data.to_csv(no_event_clinical_path)
+        no_event_clin_data.to_csv(no_event_clinical_path, index=False)
 
         # Process no-event peptide data
         print("no-event peptide data processing and saving")
@@ -100,7 +100,7 @@ def merge_hf_data(root_dir_path: str, save_dir_path: str):
         no_event_peptides_path = os.path.join(
             save_dir_path, "no_event_peptides_data.csv"
         )
-        df_ne_reset.to_csv(no_event_peptides_path)
+        df_ne_reset.to_csv(no_event_peptides_path, index=False)
         return
     else:
         raise FileNotFoundError(
