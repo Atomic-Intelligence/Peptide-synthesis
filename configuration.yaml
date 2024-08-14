@@ -29,7 +29,7 @@ synthesis:
   batch_size: 100
   number_of_synth_samples: 15
   clinical_columns_to_estimate:
-    - "BMI"
+    - "GFR_CKD_EPI_M"
   constraints:
     - constraint_class: "Inequality"
       constraint_parameters:
