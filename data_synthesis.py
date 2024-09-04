@@ -19,7 +19,7 @@ def data_synthesis(
     distribution_list: list[str],
     fit_distribution_method: str,
     filters: list[dict],
-    number_of_synth_samples: int,
+    number_of_synth_samples: list[int],
     batch_size: int,
     constraints: list[dict[str, Any]],
     processor: Processor | None = None,
@@ -31,7 +31,7 @@ def data_synthesis(
         primary_key, distribution_list, fit_distribution_method
     )
     synth_df = []
-    for filter_dict in filters:
+    for i, filter_dict in enumerate(filters):
         loader = DataLoader(
             clinical_data_path,
             peptide_data_path,
@@ -82,7 +82,7 @@ def data_synthesis(
         synthesizer.fit()
 
         # sample
-        synthetic_data = synthesizer.sample(number_of_synth_samples, batch_size)
+        synthetic_data = synthesizer.sample(number_of_synth_samples[i], batch_size)
 
         synth_df.append(
             processor.postprocess_data(data, low_count_peptides, synthetic_data)
