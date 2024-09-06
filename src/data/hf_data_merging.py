@@ -132,7 +132,7 @@ def merge_hf_data(root_dir_path: str, save_dir_path: str):
 
 
 def main():
-    merge_hf_data("/home/eanicic/Peptide-synthesis/peptides/", "/home/eanicic/Peptide-synthesis/peptides_input")
+    merge_hf_data("data/", "resources/")
 
 
 if __name__ == "__main__":
