@@ -19,8 +19,17 @@ class HFProcessorForSynthetization(Processor):
             data: structure containing both peptides and clinical data
         Returns: preprocessed data
         """
+        # First we preprocess data without null values
         data = self._preprocess_clinical_data(data)
         data = self._preprocess_peptide_data(data)
+
+        # we exclude patients which contain null values
+        valid_clinical_ids = data.clinical.drop_nulls()[self.primary_key].to_list()
+        valid_peptides_ids = data.peptides.drop_nulls()[self.primary_key].to_list()
+        valid_ids = set(valid_clinical_ids).intersection(set(valid_peptides_ids))
+        print(len(valid_ids))
+        data.clinical = data.clinical.filter(pl.col(self.primary_key).is_in(valid_ids))
+        data.peptides = data.peptides.filter(pl.col(self.primary_key).is_in(valid_ids))
         return data
 
     def _preprocess_clinical_data(self, data: Data) -> Data:
@@ -46,7 +55,9 @@ class HFProcessorForSynthetization(Processor):
             data: Data object containing peptide data as well as clinical data
         Returns: preprocessed data
         """
-        data.peptides = data.peptides.select([pl.col(col) for col in data.peptides.columns if col != ""])
+        data.peptides = data.peptides.select(
+            [pl.col(col) for col in data.peptides.columns if col != ""]
+        )
         data.peptides = data.peptides.with_columns(
             (pl.col(self.primary_key) / 1000).cast(pl.Int64)
         )
