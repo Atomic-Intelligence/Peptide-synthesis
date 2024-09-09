@@ -17,6 +17,13 @@ synthesis:
     - "resources/hf_clinical_data.csv"
   save_paths:
     - "output/"
+  bootstrapping: True
+  bootstrapping_nonzero_threshold: 0.6
+  bootstrapping_sample_sizes:
+    - 182
+    - 1700
+    - 56
+  bootstrapping_iteration_number: 1000
   missing_threshold: 0.7
   primary_key: "Patient ID"
   number_of_original_samples: Null
