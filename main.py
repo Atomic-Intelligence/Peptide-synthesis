@@ -2,7 +2,9 @@ import yaml
 from src.data.hf_data_merging import merge_hf_data
 from data_synthesis import data_synthesis
 from src.data.data_processing import HFProcessorForSynthetization
-
+from src.modeling.bootstrapping_results import bootstrapping_data
+from pathlib import Path
+import pandas as pd
 
 def load_config(config_file="configuration.yaml"):
     """
@@ -39,6 +41,10 @@ def main():
     peptide_data_paths = synthesis.get("peptide_data_paths")
     clinical_data_paths = synthesis.get("clinical_data_paths")
     save_paths = synthesis.get("save_paths")
+    bootstrapping = synthesis.get("bootstrapping")
+    bootstrapping_nonzero_threshold = synthesis.get("bootstrapping_nonzero_threshold")
+    bootstrapping_sample_sizes = synthesis.get("bootstrapping_sample_sizes")
+    bootstrapping_iteration_number = synthesis.get("bootstrapping_iteration_number")
     missing_threshold = synthesis.get("missing_threshold")
     primary_key = synthesis.get("primary_key")
     n_of_original_samples = synthesis.get("number_of_original_samples")
@@ -70,6 +76,63 @@ def main():
             clinical_columns_to_estimate,
             n_of_original_samples,
         )
+        if bootstrapping:
+            print(bootstrapping_nonzero_threshold)
+            print("#### Bootstrapping started ####")
+            path_to_synth_table = Path(save_paths[i], "synthetic_data_peptides.csv")
+            best_seed, statistic = bootstrapping_data(
+                path_to_synth_table,
+                peptide_data_paths[i],
+                bootstrapping_nonzero_threshold,
+                bootstrapping_sample_sizes[i],
+                bootstrapping_iteration_number
+            )
+            data = pd.read_csv(path_to_synth_table).sample(bootstrapping_sample_sizes[i], random_state=best_seed)
+
+            # Saving bootstrapped peptides data
+            print("#### Saving bootstrapped data ####")
+            data.to_csv(
+                Path(save_paths[i], "synthetic_data_peptides_bootstrapped.csv"),
+                header=True,
+                index=False
+            )
+
+            # select sample ids
+            sample_ids = data[primary_key]  # Adjust 'id' to match your actual column name for IDs
+
+            # load clinical data
+            path_to_clin_table = Path(save_paths[i], "synthetic_data_clinical.csv")
+            clinical = pd.read_csv(path_to_clin_table)
+
+            # Filter clinical table
+            clinical_sample = clinical[clinical[primary_key].isin(sample_ids)]
+
+            # Saving bootstrapped clinical data
+            clinical_sample.to_csv(
+                Path(save_paths[i], "synthetic_data_clinical_bootstrapped.csv"),
+                header=True,
+                index=False
+            )
+
+            # save statistic
+            print("#### Saving statistic ####")
+            stat = [
+                {'Peptide_id': peptide_id,
+                 'kl_divergence': values['kl_divergence'],
+                 'ks_p-value': values['ks_p-value']}
+                for peptide_id, values in statistic.items()
+            ]
+            # Convert the list of dictionaries into a pandas DataFrame
+            df = pd.DataFrame(stat)
+
+            # Save the DataFrame to a CSV file
+            df.to_csv(
+                Path(save_paths[i], "synthetic_data_peptides_statistic.csv"),
+                header=True,
+                index=False
+            )
+
+
 
 
 if __name__ == "__main__":
