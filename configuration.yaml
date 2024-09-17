@@ -3,7 +3,6 @@ initial_data_handling:
   root_dir_path: ""
   save_dir_path: "resources/"
 
-
 synthesis:
   filtering:
     - "Kidney disease":
@@ -18,22 +17,32 @@ synthesis:
     - "resources/hf_clinical_data.csv"
   save_paths:
     - "output/"
+  bootstrapping: True
+  bootstrapping_nonzero_threshold: 0.6
+  bootstrapping_sample_sizes:
+    - 182
+    - 1700
+    - 56
+  bootstrapping_iteration_number: 1000
   missing_threshold: 0.7
-  primary_key: 'Patient ID'
+  primary_key: "Patient ID"
   number_of_original_samples: Null
   distribution_list:
-    - 'lognorm'
-    - 'norm'
+    - "lognorm"
+    - "norm"
   fit_distribution_method: "sumsquare_error"
   random_seed: 42
   batch_size: 100
-  number_of_synth_samples: 15
+  # each row defines the number of samples for different path in peptide_data_paths
+  # each number in a list defines the number of samples for different filters in filtering
+  number_of_synth_samples:
+    - [10, 15]
+    - [20, 25]
   clinical_columns_to_estimate:
-    - "BMI"
+    - "GFR_CKD_EPI_M"
   constraints:
     - constraint_class: "Inequality"
       constraint_parameters:
-       low_column_name: "Blutdruck, diastolischM"
-       high_column_name: "Blutdruck, systolischM"
-       strict_boundaries: True
-
+        low_column_name: "Blutdruck, diastolischM"
+        high_column_name: "Blutdruck, systolischM"
+        strict_boundaries: True
