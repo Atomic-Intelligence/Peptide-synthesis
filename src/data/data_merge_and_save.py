@@ -1,6 +1,7 @@
 from pathlib import Path
 import polars as pl
 import os
+import random
 
 
 def merge_and_save(
@@ -24,12 +25,13 @@ def merge_and_save(
 
     clinical_data_merged = pl.concat(clinical_data_list)
     n = clinical_data_merged.shape[0]
+    random_number = random.randint(0, 10000)
     clinical_data_merged = clinical_data_merged.with_columns(
-        pl.arange(1, n + 1).alias(primary_key)
+        (pl.arange(1, n + 1) + pl.lit(random_number)).alias(primary_key)
     )
     peptides_data_merged = pl.concat(peptides_data_list).fill_null(0.0)
     peptides_data_merged = peptides_data_merged.with_columns(
-        pl.arange(1, n + 1).alias(primary_key)
+        (pl.arange(1, n + 1) + pl.lit(random_number)).alias(primary_key)
     )
 
     Path.mkdir(save_to, exist_ok=True) if save_to is not None else os.getcwd()
