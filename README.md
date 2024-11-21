@@ -60,7 +60,8 @@ Installation should take around 3 minutes to complete.
       fit_distribution_method: "sumsquare_error"  #  method to choose best fitting distribution for each variable
       random_seed: 42  #  random seed if you want to fix the experiment
       batch_size: 100  #  batch size for faster sampling
-      number_of_synth_samples: 500  #  number of synthetic patients to generate
+      number_of_synth_samples:  #  number of synthetic patients to generate
+        - [250, 250] # each number in a list defines the number of samples for different filters in filtering
       clinical_columns_to_estimate:  #  clinical variables for which distribution should be estimated
         - "GFR_CKD_EPI_M"
       constraints:  # list of rule based constraints for your data

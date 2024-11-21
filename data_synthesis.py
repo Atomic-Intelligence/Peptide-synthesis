@@ -79,6 +79,7 @@ def data_synthesis(
             constraints=constraints,
         )
 
+        print("Fitting synthesizer...")
         synthesizer.fit()
 
         # sample

@@ -9,15 +9,18 @@ from tqdm import tqdm
 
 def process_iteration(
     seed: int,
-    synt_peptides: pd.DataFrame,
+    synthetic_peptides: pd.DataFrame,
     original_peptides: pd.DataFrame,
     non_zero_col: list[str],
     sample_size: int,
 ):
-    synt_peptides_sample = synt_peptides.sample(sample_size, random_state=seed)
+    synthetic_peptides_sample = synthetic_peptides.sample(
+        sample_size, random_state=seed
+    )
     results = {}
+
     for col in non_zero_col:
-        synth_col = synt_peptides_sample[col]
+        synth_col = synthetic_peptides_sample[col]
         original_col = original_peptides[col]
 
         try:
@@ -25,11 +28,11 @@ def process_iteration(
             stat, p_value = ks_2samp(synth_col, original_col)
         except Exception as e:
             print(f"Error occurred while computing KS value for {col}: {e}")
-            p_value = np.nan
+            p_value = 0
 
         try:
             # KL divergence
-            pdf_real = gaussian_kde(original_col, bw_method="scott")
+            pdf_original = gaussian_kde(original_col, bw_method="scott")
             pdf_synthetic = gaussian_kde(synth_col, bw_method="scott")
 
             # Compute KL divergence
@@ -41,13 +44,13 @@ def process_iteration(
             kl_divergence = np.sum(
                 np.where(
                     pdf_synthetic(x) != 0,
-                    pdf_real(x) * np.log(pdf_real(x) / pdf_synthetic(x)),
+                    pdf_original(x) * np.log(pdf_original(x) / pdf_synthetic(x)),
                     0,
                 )
             )
         except Exception as e:
             print(f"Error occurred while computing KL divergence for {col}: {e}")
-            kl_divergence = np.nan
+            kl_divergence = np.inf
 
         results[col] = {"ks_p-value": p_value, "kl_divergence": kl_divergence}
 
@@ -63,8 +66,8 @@ def bootstrapping_data(
     n_jobs=-1,  # Use all available CPU cores by default
 ):
     original_peptides = pd.read_csv(path_to_original_table)
-    synt_peptides = pd.read_csv(path_to_synt_table)
-    if sample_size > synt_peptides.shape[0]:
+    synthetic_peptides = pd.read_csv(path_to_synt_table)
+    if sample_size > synthetic_peptides.shape[0]:
         raise ValueError(f"Sample size {sample_size} is too big.")
 
     non_zero_col = [
@@ -85,7 +88,7 @@ def bootstrapping_data(
     # Parallelize the bootstrapping process and keep track of seeds
     results_list = Parallel(n_jobs=n_jobs)(
         delayed(process_iteration)(
-            seed, synt_peptides, original_peptides, non_zero_col, sample_size
+            seed, synthetic_peptides, original_peptides, non_zero_col, sample_size
         )
         for seed in tqdm(seeds, desc="Bootstrapping Progress")
     )
