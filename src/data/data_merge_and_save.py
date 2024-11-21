@@ -9,6 +9,7 @@ def merge_and_save(
     peptides_data_list: list[pl.DataFrame],
     primary_key: str,
     save_to: Path | None = None,
+    random_seed: int | None = None,
 ) -> None:
     """
     function which merges multiple groups of synthetic patients into single tables for clinical
@@ -25,6 +26,8 @@ def merge_and_save(
 
     clinical_data_merged = pl.concat(clinical_data_list)
     n = clinical_data_merged.shape[0]
+    if random_seed is not None:
+        random.seed(random_seed)
     random_number = random.randint(0, 10000)
     clinical_data_merged = clinical_data_merged.with_columns(
         (pl.arange(1, n + 1) + pl.lit(random_number)).alias(primary_key)
