@@ -90,4 +90,10 @@ def data_synthesis(
 
     clinical_data_list = [data.clinical for data in synth_df]
     peptides_data_list = [data.peptides for data in synth_df]
-    merge_and_save(clinical_data_list, peptides_data_list, primary_key, Path(save_path))
+    merge_and_save(
+        clinical_data_list,
+        peptides_data_list,
+        primary_key,
+        Path(save_path),
+        random_seed,
+    )
