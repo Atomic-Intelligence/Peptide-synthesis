@@ -54,6 +54,10 @@ poetry shell
 │   └── evaluation/                  # Evaluation configurations
 │       ├── privacy_script.yaml      # Privacy evaluation configuration
 │       └── authenticity_estimator/  # Authenticity assessment configs
+├── resources/                       # Technical reports and documentation
+│   ├── ARF_and_GAN_report.pdf       # Adversarial Random Forest and GAN analysis
+│   ├── Copulas_report.pdf           # Gaussian Copula implementation details
+│   └── Privacy_Appendix.pdf         # Privacy evaluation methodology
 ├── tests/                           # Test files
 └── outputs/                         # Generated outputs and logs
 ```
@@ -298,6 +302,14 @@ mlflow:
 - **Feature importance analysis**: Analysis of which features contribute to inauthenticity
 - **Authenticity distribution plots**: Visualizations of authenticity scores and classifications
 - **Privacy audit reports**: Detailed privacy assessment with recommendations
+
+## Technical Documentation
+
+The `resources/` directory contains detailed technical reports on the project components:
+
+- **ARF_and_GAN_report.pdf**: Comprehensive analysis of Adversarial Random Forest and GAN model implementations, including performance comparisons and technical specifications
+- **Copulas_report.pdf**: Detailed documentation of the Gaussian Copula implementation, marginal distribution selection, and mathematical foundations
+- **Privacy_Appendix.pdf**: In-depth methodology for privacy evaluation, authenticity assessment techniques, and privacy-preserving synthetic data generation
 
 
 
