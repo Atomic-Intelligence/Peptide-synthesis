@@ -5,8 +5,8 @@ from loguru import logger
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 
-from v0.src import safe_start_run, safe_log_figure
-from v0.src import plot_reduced_data
+from src.evaluation.mlflow_threadsafe import safe_start_run, safe_log_figure
+from src.evaluation.utils.plotting import plot_reduced_data
 
 
 def make_peptide_pca(

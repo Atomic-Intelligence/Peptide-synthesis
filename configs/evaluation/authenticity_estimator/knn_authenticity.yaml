@@ -1,0 +1,14 @@
+_target_: src.evaluation.privacy.AuthenticityEstimator.AuthenticityEstimator
+
+scaler:
+  _target_: sklearn.preprocessing.RobustScaler
+
+authenticity_threshold: 1.0
+categorical_columns: 
+    - "event_type"
+    - "Geschlecht (1=female)"
+    - "Kidney disease"
+    - "diabetes"
+    - "CVD"
+    - "hypertension"    
+    

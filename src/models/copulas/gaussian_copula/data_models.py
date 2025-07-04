@@ -1,7 +1,7 @@
 # --- Pydantic Models ---
 from pydantic import BaseModel, Field
 
-from v0.src import (
+from src.models.copulas.marginal_distributions.marginal_distribution_metrics import (
     UnivariateDistribution,
 )
 

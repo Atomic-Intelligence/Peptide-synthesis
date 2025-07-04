@@ -1,0 +1,16 @@
+
+num_threads: 8
+event_types:
+  - name: "hf"
+    display_name: "Heart Failure"
+    time_to_event_column: "FU duration_CAD_Hfevent (to event or last visit)"
+  - name: "ckd"
+    display_name: "Chronic Kidney Disease"
+    time_to_event_column: "time-to-CKDevent(to event or last visit)"
+
+defaults:
+  - _self_
+  - svm_peptide_ids: ids.yaml
+  - paths: paths.yaml
+  - mlflow: mlflow.yaml
+  - classifier_models: classifiers.yaml

@@ -11,7 +11,7 @@ import torch
 from sklearn.preprocessing import OneHotEncoder, QuantileTransformer
 from torch.utils.data import DataLoader, Dataset
 
-from v0.src import (
+from src.data.utils import (
     CATEGORICAL_CLINICAL_COLUMNS,
     NUMERICAL_CLINICAL_COLUMNS,
     select_top_n_peptides,

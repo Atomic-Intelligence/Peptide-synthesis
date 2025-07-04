@@ -4,8 +4,8 @@ from pathlib import Path
 import mlflow
 import polars as pl
 
-from v0.src import setup_logger
-from v0.src import (
+from src.logger import setup_logger
+from src.models.synthetization_model_interface import (
     MlFlowTrainingRunInfo,
     SynthetizationModelInterface,
 )

@@ -1,0 +1,20 @@
+defaults:
+  - paths: paths
+  - experiment: exp
+  - data_processor: processor
+  - model: gaussian_copula
+  - inference: inference_runner
+  - _self_
+
+run_training: true
+run_inference: true
+
+event: no_event
+
+experiment_name: Gaussian Copula - V2 - Extra peptides - NonNegativity
+run_name: NE
+
+sampled_patients_num: 0
+
+ml_flow_tracking_uri: http://localhost:5000
+primary_key: idAuswertung

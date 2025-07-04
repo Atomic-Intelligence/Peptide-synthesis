@@ -10,12 +10,12 @@ import seaborn as sns
 from loguru import logger
 from scipy.stats import mannwhitneyu, false_discovery_control
 
-from v0.src import safe_start_run
-from v0.src import (
+from src.evaluation.mlflow_threadsafe import safe_start_run
+from src.evaluation.utils.eval_utils import (
     peptide_eGFR_correlation,
     get_peptide_columns,
 )
-from v0.src import (
+from src.evaluation.utils.plotting import (
     real_synth_scatterplot,
     significant_peptide_venn,
 )

@@ -1,0 +1,6 @@
+_target_: tests.mock.dummy_model.DummySynthetizationModel
+
+ml_flow_info:
+  _target_: src.models.synthetization_model_interface.MlFlowTrainingRunInfo
+  experiment_name: ${experiment_name}
+  run_name: ${run_name}
