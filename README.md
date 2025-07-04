@@ -8,9 +8,8 @@ This project provides a complete workflow for:
 - Training synthetic data generation models on real peptide datasets
 - Generating synthetic peptide data that preserves clinical characteristics
 - Evaluating the quality of synthetic data through multiple analysis methods
-- **Privacy evaluation and authenticity assessment of synthetic data**
+- Privacy evaluation and authenticity assessment of synthetic data
 - Supporting multiple generative models (Gaussian Copula, GAN, Adversarial Random Forest)
-- **Comprehensive privacy metrics and authenticity estimation using KNN-based approaches**
 
 ## Installation
 
