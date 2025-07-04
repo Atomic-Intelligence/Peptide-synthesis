@@ -4,8 +4,8 @@ import mlflow
 from loguru import logger
 import umap
 from sklearn.preprocessing import StandardScaler
-from v0.src import safe_start_run
-from v0.src import plot_reduced_data
+from src.evaluation.mlflow_threadsafe import safe_start_run
+from src.evaluation.utils.plotting import plot_reduced_data
 
 
 def make_peptide_umap(

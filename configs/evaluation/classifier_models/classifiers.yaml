@@ -1,0 +1,77 @@
+# The two SVC classifiers below are trained on real data
+# and used to estimate Kaplan-Meier survival tests on
+# real and synthetic data
+real_hf_classifier:
+  _target_: sklearn.svm.SVC
+  probability: true
+  kernel: "linear"
+  C: 0.1 #100
+  gamma: "scale"
+  coef0: 0.0
+  degree: 2 #3
+  tol: 0.001
+  cache_size: 40
+  shrinking: true
+  class_weight: balanced
+    # 0: 0.725934
+    # 1: 0.274066
+
+
+
+
+real_ckd_classifier:
+  _target_: sklearn.svm.SVC
+  probability: true
+  kernel: "poly"
+  C: 10  #  1000
+  coef0: 0.0
+  degree: 3
+  gamma: "auto"
+  tol: 0.001
+  cache_size: 40
+  shrinking: true
+  class_weight: balanced
+    # 0: 0.537911
+    # 1: 0.462089
+
+# The two classifiers below are to be trained on
+# synthetic data and used to make predictions on
+# real data in order to estimate the machine learning efficiency
+# of the generated synthetic data. 
+# They are very simple models on purpose.
+synthetic_hf_classifier:
+  _target_: src.evaluation.classifiers.ClassifierFactory.make_svm_scaler_pipeline
+  steps:
+    scaler:
+      _target_: sklearn.preprocessing.StandardScaler
+    
+    svm:
+      _target_: sklearn.svm.SVC
+      probability: true
+      kernel: "rbf"
+      C:  1000
+      coef0: 0.0
+      degree: 3
+      tol: 0.01
+      cache_size: 40
+      shrinking: true
+      class_weight: balanced
+
+
+synthetic_ckd_classifier:
+  _target_: src.evaluation.classifiers.ClassifierFactory.make_svm_scaler_pipeline
+  steps:
+    scaler:
+      _target_: sklearn.preprocessing.StandardScaler
+    
+    svm:
+      _target_: sklearn.svm.SVC
+      probability: true
+      kernel: "rbf"
+      C:  1000
+      coef0: 0.0
+      degree: 3
+      tol: 0.01
+      cache_size: 40
+      shrinking: true
+      class_weight: balanced

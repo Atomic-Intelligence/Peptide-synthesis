@@ -5,21 +5,21 @@ import mlflow
 import polars as pl
 from scipy import stats
 
-from v0.src import (
+from src.data.utils import (
     DataProcessor,
     CATEGORICAL_CLINICAL_COLUMNS,
     NUMERICAL_CLINICAL_COLUMNS,
 )
-from v0.src import setup_logger
-from v0.src import GaussianCopulaBasic
-from v0.src import SDVPreprocessor
-from v0.src import (
+from src.logger import setup_logger
+from src.models.copulas.gaussian_copula.gaussian_copula_basic import GaussianCopulaBasic
+from src.models.copulas.gaussian_copula.preprocessing import SDVPreprocessor
+from src.models.copulas.marginal_distributions.marginal_distribution_estimator import (
     MarginalDistributionEstimator,
 )
-from v0.src import (
+from src.models.copulas.marginal_distributions.marginal_distribution_metrics import (
     KullbackLeiblerDivergence, JensenShannonDivergence,
 )
-from v0.src import (
+from src.models.synthetization_model_interface import (
     DatasetMetadata,
     MlFlowTrainingRunInfo,
 )

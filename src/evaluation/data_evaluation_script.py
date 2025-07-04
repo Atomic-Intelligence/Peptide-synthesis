@@ -7,30 +7,31 @@ from functools import partial
 import hydra
 import mlflow
 import polars as pl
+import numpy as np
 from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig
 
 # Import all your existing modules
-from v0.src import (
+from src.data.PeptideDataset import (
     CATEGORICAL_CLINICAL_COLUMNS,
     NUMERICAL_CLINICAL_COLUMNS,
 )
-from v0.src import get_event_and_control, get_peptide_columns
-from v0.src import survival_analysis
-from v0.src import (
+from src.evaluation.utils.eval_utils import get_event_and_control, get_peptide_columns
+from src.evaluation.analysis.multi_peptide_analysis import survival_analysis
+from src.evaluation.analysis.single_peptide_analysis import (
     eGFR_CKD_score_analysis,
     compare_eGFR,
     peptide_eGFR_analysis,
     mann_whitney_analysis,
     plot_single_peptide_distributions,
 )
-from v0.src import (
+from src.evaluation.projections.pca_projections import (
     clinical_variable_pca,
     make_peptide_pca,
 )
-from v0.src import make_peptide_umap
-from v0.src import (
+from src.evaluation.projections.umap_projections import make_peptide_umap
+from src.evaluation.classifiers.machine_learning_efficiency import (
     train_on_real_estimate_on_synthetic,
     train_on_synthetic_test_on_real,
 )

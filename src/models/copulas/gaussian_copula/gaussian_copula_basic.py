@@ -1,4 +1,5 @@
 # Standard library imports
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -15,18 +16,18 @@ from scipy import stats
 from statsmodels.distributions.copula.copulas import CopulaDistribution
 from statsmodels.distributions.copula.elliptical import GaussianCopula, StudentTCopula
 
-from v0.src import setup_logger
-from v0.src import (
+from src.logger import setup_logger
+from src.models.copulas.gaussian_copula.data_models import (
     ModelSignature,
 )
-from v0.src import SDVPreprocessor
-from v0.src import (
+from src.models.copulas.gaussian_copula.preprocessing import SDVPreprocessor
+from src.models.copulas.marginal_distributions.marginal_distribution_estimator import (
     MarginalDistributionEstimator,
 )
-from v0.src import (
+from src.models.copulas.marginal_distributions.marginal_distribution_metrics import (
     MockUnivariateDistributionMetric,
 )
-from v0.src import (
+from src.models.synthetization_model_interface import (
     SynthetizationModelInterface,
     DatasetMetadata,
     MlFlowTrainingRunInfo,

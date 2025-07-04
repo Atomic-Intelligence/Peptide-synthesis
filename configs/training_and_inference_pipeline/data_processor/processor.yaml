@@ -1,0 +1,15 @@
+_target_: src.data.utils.DataProcessor
+
+clinical_columns:
+    - "Geschlecht (1=female)"
+    - "Kidney disease"
+    - "diabetes"
+    - "CVD"
+    - "hypertension"
+    - "Blutdruck, diastolischM"
+    - "Blutdruck, systolischM"
+    - "GFR_CKD_EPI_M"
+    - "BMI_M"
+    - "Alter_M"
+    - "time-to-CKDevent(to event or last visit)"
+    - "FU duration_CAD_Hfevent (to event or last visit)"

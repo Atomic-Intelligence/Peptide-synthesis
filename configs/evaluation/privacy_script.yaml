@@ -1,0 +1,11 @@
+
+experiment_name: "Authenticity_Estimation"
+description: "Comparing Data Authenticity for Copula Generated Data for all cases."
+
+zero_percentage: 0.4
+
+defaults:
+  - authenticity_estimator: knn_authenticity 
+  - paths: paths
+  - mlflow: mlflow  
+  - _self_

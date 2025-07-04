@@ -1,0 +1,19 @@
+_target_: src.models.ctgan.gan_interface.CTGANSynthetizationModel
+
+gan_params:
+  epochs: 1
+  batch_size: 500
+  generator_dim: [ 256, 256 ]
+  discriminator_dim: [ 256, 256 ]
+  generator_lr: 0.0002
+  discriminator_lr: 0.0002
+  discriminator_steps: 1
+  log_frequency: True
+  verbose: True
+  pac: 10
+  cuda: True
+
+ml_flow_info:
+  experiment_name: ${experiment_name}
+  run_name: ${run_name}
+

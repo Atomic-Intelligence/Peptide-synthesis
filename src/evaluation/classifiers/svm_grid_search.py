@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 from loguru import logger
 import matplotlib.pyplot as plt
@@ -13,7 +14,7 @@ from sklearn.preprocessing import StandardScaler, RobustScaler, QuantileTransfor
 from sklearn.metrics import classification_report, confusion_matrix, f1_score
 
 
-from v0.src import get_peptide_columns
+from src.data.utils import get_peptide_columns
 
 
 def svm_grid_search(

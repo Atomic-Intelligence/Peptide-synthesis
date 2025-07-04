@@ -4,10 +4,10 @@ import polars as pl
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 
-from v0.src import DataProcessor
-from v0.src import InferenceRunner
-from v0.src import setup_logger
-from v0.src import (
+from src.data.utils import DataProcessor
+from src.inference.inference_runner import InferenceRunner
+from src.logger import setup_logger
+from src.models.synthetization_model_interface import (
     SynthetizationModelInterface,
     MlFlowTrainingRunInfo,
     DatasetMetadata,
@@ -35,34 +35,6 @@ def train_model(
     data_processor_partial = instantiate(cfg.data_processor, _partial_=True)
     df = pl.read_csv(cfg.paths.real_dataset_path)
 
-    def subsample_by_event(
-        df: pl.DataFrame, event_counts: dict, event_col: str
-    ) -> pl.DataFrame:
-        """
-        Subsamples a Polars DataFrame to keep a specified number of rows for each event type.
-
-        Args:
-            df: The input Polars DataFrame.
-            event_counts: A dictionary where keys are event types and values are the
-                        desired number of samples for each event.
-            event_col: The name of the column containing the event type.
-
-        Returns:
-            A new Polars DataFrame with the subsampled data.
-        """
-        subsampled_dfs = []
-        for event, count in event_counts.items():
-            subset = df.filter(pl.col(event_col) == event).head(count)
-            subsampled_dfs.append(subset)
-
-        if not subsampled_dfs:
-            return pl.DataFrame()  # Return an empty DataFrame if event_counts is empty
-
-        return pl.concat(subsampled_dfs)
-
-    # event_count = {"no_event": 254, "hf": 37, "ckd": 9}
-
-    # df = subsample_by_event(df, event_counts=event_count, event_col="event_type")
 
     data_processor: DataProcessor = data_processor_partial(
         dfs=[df]  # pl.read_csv(cfg.paths.real_dataset_path)]
@@ -80,14 +52,14 @@ def train_model(
     )[0]
 
     patient_ids = (
-        real_dataset["idAuswertung"].unique().to_list()
-        if "idAuswertung" in real_dataset.columns
+        real_dataset[cfg.primary_key].unique().to_list()
+        if cfg.primary_key in real_dataset.columns
         else []
     )
     patient_ids = [str(patient_id) for patient_id in patient_ids]
     print(real_dataset)
 
-    real_dataset = real_dataset.drop("idAuswertung")
+    real_dataset = real_dataset.drop(cfg.primary_key)
 
     logger.success(f"Loaded real dataset, shape: {real_dataset.shape}")
 
@@ -127,7 +99,7 @@ def run_inference(
     config_name="pipeline.yaml",
 )
 def main(cfg: DictConfig):
-    mlflow.set_tracking_uri("http://10.100.111.210:5002")
+    mlflow.set_tracking_uri(cfg.ml_flow_tracking_uri)
 
     model = initialize_model(cfg)
 
@@ -139,7 +111,7 @@ def main(cfg: DictConfig):
             cfg=cfg, ml_flow_info=model.ml_flow_info, model=model
         )
         synthetic_data.write_csv(
-            f"student_{cfg.event}_sampled_{cfg.sampled_patients_num}.csv"
+            f"synthetic_{cfg.event}_sampled_{cfg.sampled_patients_num}.csv"
         )
 
 

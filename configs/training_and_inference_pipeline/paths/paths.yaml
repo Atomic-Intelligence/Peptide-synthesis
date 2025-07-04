@@ -1,0 +1,8 @@
+root_data_path: /data1/prostrat-ai
+synthetic_data_dir: ${.root_data_path}/synthetic_datasets
+
+
+real_dataset_path: ${.root_data_path}/data/merged_peptide_and_clinical.csv
+synthetic_dataset_path: ${.synthetic_data_dir}
+
+run_dir: ./

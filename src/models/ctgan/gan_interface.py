@@ -13,9 +13,9 @@ from sdv.metadata import SingleTableMetadata
 from sdv.single_table import CTGANSynthesizer
 from sklearn.preprocessing import QuantileTransformer
 
-from v0.src import CATEGORICAL_CLINICAL_COLUMNS
-from v0.src import DataFrame
-from v0.src import SynthetizationModelInterface, MlFlowTrainingRunInfo
+from src.data.utils import CATEGORICAL_CLINICAL_COLUMNS
+from src.models.AdversarialRandomForests.ARFPipeline import DataFrame
+from src.models.synthetization_model_interface import SynthetizationModelInterface, MlFlowTrainingRunInfo
 
 
 class CTGANSynthetizationModel(SynthetizationModelInterface):

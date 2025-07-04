@@ -1,0 +1,24 @@
+_target_: src.models.copulas.gaussian_copula.gaussian_copula_basic.GaussianCopulaBasic
+
+marginal_distribution_estimator:
+  _target_: src.models.copulas.marginal_distributions.marginal_distribution_estimator.MarginalDistributionEstimator
+  continuous_distributions:
+    - stats.beta
+    - stats.norm
+    - stats.lognorm
+    - stats.truncnorm
+    - stats.gamma
+    - stats.t
+    - stats.uniform
+    - stats.expon
+  univariate_distribution_metric:
+    _target_: src.models.copulas.marginal_distributions.marginal_distribution_metrics.KullbackLeiblerDivergence
+
+sdv_preprocessor:
+  _target_: src.models.copulas.gaussian_copula.preprocessing.SDVPreprocessor
+
+ml_flow_info:
+  experiment_name: ${experiment_name}
+  run_name: ${run_name}
+
+copula_type: gaussian

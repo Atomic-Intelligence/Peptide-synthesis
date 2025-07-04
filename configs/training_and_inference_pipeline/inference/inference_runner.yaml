@@ -1,0 +1,6 @@
+_target_: src.inference.inference_runner.InferenceRunner
+
+synthetic_dataset_path: ${paths.synthetic_dataset_path}
+inference_run_name: synthetization
+
+n_synthetic_patients: 2000

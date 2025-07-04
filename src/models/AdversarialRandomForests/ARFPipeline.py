@@ -21,14 +21,14 @@ from sklearn.preprocessing import (
     OneHotEncoder,
 )
 
-from v0.src import (
+from src.data.utils import (
     NUMERICAL_CLINICAL_COLUMNS,
     TIME_TO_EVENT_COLUMNS,
     CATEGORICAL_CLINICAL_COLUMNS,
 )
-from v0.src import split_peptide_columns_by_zero_percentage
-from v0.src import HistogramImputation
-from v0.src import (
+from src.data.utils import split_peptide_columns_by_zero_percentage
+from src.models.Imputation.HistogramImputation import HistogramImputation
+from src.models.synthetization_model_interface import (
     SynthetizationModelInterface,
     MlFlowTrainingRunInfo,
 )
