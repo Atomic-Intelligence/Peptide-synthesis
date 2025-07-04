@@ -11,6 +11,8 @@ This project provides a complete workflow for:
 - Privacy evaluation and authenticity assessment of synthetic data
 - Supporting multiple generative models (Gaussian Copula, GAN, Adversarial Random Forest)
 
+A legacy version from an early project iteration can be found at `v0`
+
 ## Installation
 
 ### Prerequisites
