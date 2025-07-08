@@ -14,7 +14,7 @@ class HistogramImputation:
         self.col_densities = {col: [] for col in self.column_names}
         self.medians = {col: [] for col in self.column_names}
 
-        for col in tqdm(self.column_names, desc=f"Calculating histogram imputation..."):
+        for col in tqdm(self.column_names, desc="Calculating histogram imputation..."):
             col_values = data.select(col).to_numpy()
             hist, bin_edges = np.histogram(col_values, bins=self.num_bins)
             for i in range(len(bin_edges) - 1):
@@ -26,7 +26,7 @@ class HistogramImputation:
                     self.medians[col].append((up + low) / 2)
 
             self.col_densities[col] = hist / np.sum(hist)
-        logger.success(f"Imputation done!")
+        logger.success("Imputation done!")
 
     def generate(self, n: int) -> tuple[str, np.ndarray]:
         generated_data = [

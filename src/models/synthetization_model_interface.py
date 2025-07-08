@@ -8,6 +8,10 @@ import mlflow
 import polars as pl
 from pydantic import BaseModel
 
+from src.logger import setup_logger
+
+logger = setup_logger()
+
 
 class DatasetMetadata(BaseModel):
     peptide_ids: list[str]
@@ -44,7 +48,7 @@ class SynthetizationModelInterface(abc.ABC):
             raise RuntimeError("Model is already fitted")
 
         # get or create experiment id for given experiment name
-        print(f"{self.ml_flow_info}")
+        logger.info(f"{self.ml_flow_info}")
         experiment_id, _ = self.get_or_create_run(self.ml_flow_info)
 
         if "idAuswertung" in real_dataset.columns:

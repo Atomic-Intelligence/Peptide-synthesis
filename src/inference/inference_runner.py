@@ -31,7 +31,6 @@ class InferenceRunner:
             f"{inference_run_name}_{uuid.uuid4()}"  # ensure uniqueness
         )
 
-
         self.n_synthetic_patients = n_synthetic_patients
 
     def run(self, n_synthetic_patients: int) -> pl.DataFrame:
