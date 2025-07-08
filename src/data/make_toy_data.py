@@ -36,7 +36,6 @@ def make_toy_data(num_samples: int, num_peptide_cols: int = 30) -> pd.DataFrame:
     corr = corr / np.linalg.norm(corr)
 
     corr[np.diag_indices(num_numerical_columns)] = np.ones(num_numerical_columns)
-    print(corr)
     numerical_copula = CopulaDistribution(
         copula=GaussianCopula(corr=corr), marginals=marginals
     )
@@ -54,4 +53,5 @@ if __name__ == "__main__":
     import os
 
     dataframe = make_toy_data(num_samples=2000, num_peptide_cols=30)
+    print(dataframe)
     dataframe.to_csv(f"{os.getcwd()}/example_data/toy_data.csv")
