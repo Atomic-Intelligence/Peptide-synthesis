@@ -57,7 +57,6 @@ def train_model(
         else []
     )
     patient_ids = [str(patient_id) for patient_id in patient_ids]
-    print(real_dataset)
 
     real_dataset = real_dataset.drop(cfg.primary_key)
 
@@ -72,7 +71,7 @@ def train_model(
     )
     logger.info("Training model...")
     model.fit(real_dataset, dataset_metadata)
-    logger.success(f"Training completed!")
+    logger.success("Training completed!")
 
     return model
 

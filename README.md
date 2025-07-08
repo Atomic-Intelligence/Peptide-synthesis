@@ -220,6 +220,32 @@ real_data_path: "/path/to/real_data.csv"
 synthetic_data_path: "/path/to/synthetic_data.csv"
 ```
 
+## Toy Data Generation
+
+For testing and experimentation purposes, you can generate synthetic toy datasets that mimic the structure of real peptide data:
+
+```bash
+# Generate toy data with default parameters (2000 samples, 30 peptide columns)
+python src/data/make_toy_data.py
+
+# Or import the function in your own scripts
+from src.data.make_toy_data import make_toy_data
+toy_data = make_toy_data(num_samples=1000, num_peptide_cols=50)
+```
+
+### Toy Data Features
+- **Clinical columns**: Includes all categorical and numerical clinical variables
+- **Time-to-event columns**: Synthetic survival analysis data
+- **Peptide columns**: Configurable number of synthetic peptide measurements
+- **Realistic correlations**: Uses Gaussian copula with random marginal distributions
+- **Statistical diversity**: Employs gamma, lognormal, and exponential distributions
+
+The generated toy data maintains the same structure as real datasets, making it ideal for:
+- Testing pipeline functionality
+- Developing new features
+- Demonstrating the system without sensitive data
+- Performance benchmarking
+
 ## Available Models
 
 ### 1. Gaussian Copula (Default)
@@ -233,6 +259,10 @@ synthetic_data_path: "/path/to/synthetic_data.csv"
 ### 3. Adversarial Random Forest
 - **Configuration**: `configs/training_and_inference_pipeline/model/arf.yaml`
 - **Features**: Tree-based adversarial training
+
+### 4. Histogram Imputation
+- **Location**: `src/models/Imputation/HistogramImputation.py`
+- **Features**: Histogram-based data imputation and generation using bin-wise probability distributions. 
 
 ## Evaluation Metrics
 
@@ -274,6 +304,8 @@ mlflow:
   tracking_uri: "http://10.100.111.210:5002"
   experiment_name: ${experiment_name}
 ```
+
+To run the project, set up an MLflow instance and modify the tracking_uri in the configuration to point to it.
 
 ### Logged Metrics
 - Model training metrics

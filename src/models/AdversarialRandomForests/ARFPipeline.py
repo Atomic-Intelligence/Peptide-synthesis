@@ -33,8 +33,6 @@ from src.models.synthetization_model_interface import (
     MlFlowTrainingRunInfo,
 )
 
-# logger.add(sys.stdout, format="{time} - {level}: {message}", level="INFO")
-
 
 Scaler = Union[StandardScaler, RobustScaler, QuantileTransformer]
 DataFrame = Union[pl.DataFrame, pd.DataFrame]
@@ -87,8 +85,7 @@ class ARFPipeline(SynthetizationModelInterface):
     def _fit(self, data: DataFrame, *args, **kwargs):
         logger.info("Starting model fitting...")
         self.all_columns = data.columns
-        # NOTE: below_zero_threshold are passed directly to the synthesis model
-        # while the above_zero_threshold are passed to the data imputer (TODO)
+        
         data = self.select_event(data)
         data = data.fill_null(0.0)
         data = data.fill_nan(0.0)
@@ -104,7 +101,7 @@ class ARFPipeline(SynthetizationModelInterface):
         )
         self.imputation = self.imputation(column_names=self.above_zero_threshold)
         self.imputation.fit(data.select(self.above_zero_threshold))
-        logger.info(f"Peptide data split into low zero and high zero counts")
+        logger.info("Peptide data split into low zero and high zero counts")
 
         # Save the original numerical and categorical columns
         self.numerical_columns = (
@@ -135,10 +132,10 @@ class ARFPipeline(SynthetizationModelInterface):
             data_array,
             columns=self.numerical_feature_names + self.categorical_feature_names,
         )
-        logger.info(f"Beginning adversarial training...")
+        logger.info("Beginning adversarial training...")
         self.model = self.model_factory(df)
-        logger.success(f"Adversarial training complete!")
-        logger.info(f"Beinning density estimation!")
+        logger.success("Adversarial training complete!")
+        logger.info("Beinning density estimation!")
         stats = self.model.forde()
         logger.success(f"Density estimation complete!\n{stats}")
 
@@ -161,7 +158,7 @@ class ARFPipeline(SynthetizationModelInterface):
         return model
 
     def log_model(self):
-        logger.info(f"Logging model to MLflow!")
+        logger.info("Logging model to MLflow!")
 
         with tempfile.TemporaryDirectory("wb") as temp_dir:
             model_pickle_path = Path(temp_dir, "arf_model.pkl")
@@ -173,7 +170,7 @@ class ARFPipeline(SynthetizationModelInterface):
     def _generate(self, n: int) -> DataFrame:
         assert (
             self.model is not None
-        ), f"The model has not been properly fitted to the real data! please call the .fit function first."
+        ), "The model has not been properly fitted to the real data! please call the .fit function first."
 
         raw_synthetic = self.model.forge(n=n)
         numerical_features = raw_synthetic[self.numerical_feature_names]
@@ -199,10 +196,6 @@ class ARFPipeline(SynthetizationModelInterface):
     version_base="1.1", config_path="../../../configs", config_name="arf_configs.yaml"
 )
 def main(cfg: DictConfig) -> None:
-    # print(
-    #    f"Output directory  : {hydra.core.hydra_config.HydraConfig.get().runtime.output_dir}"
-    # )
-
     mlflow.set_tracking_uri(cfg.mlflow.tracking_uri)
     mlflow.set_experiment(cfg.mlflow.experiment_name)
 
@@ -238,7 +231,6 @@ def main(cfg: DictConfig) -> None:
     logger.info(
         f"Completed experiment: {mlflow_run_info.experiment_name}\nCompleted run {mlflow_run_info.run_name}"
     )
-    # model = ARFPipeline.load_pretrained_from_mlflow_run(mlflow_run_info)
     generated_data: DataFrame = model.generate(n_synthetic_patients=1700)
     save_dir = f"{cfg.paths.save_data_path}/arf_event_{cfg.event_type}_{mlflow_run_info.run_name}"
     os.makedirs(save_dir, exist_ok=True)
