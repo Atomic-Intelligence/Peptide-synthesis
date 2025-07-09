@@ -12,6 +12,8 @@ from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig
 
+from src.mlflow import start_or_connect_mlflow_server
+
 # Import all your existing modules
 from src.data.PeptideDataset import (
     CATEGORICAL_CLINICAL_COLUMNS,
@@ -427,7 +429,7 @@ def run_evaluation(cfg: DictConfig):
     version_base="1.1", config_path="../../configs/evaluation", config_name="data_eval_config.yaml"
 )
 def main(cfg: DictConfig) -> None:
-    mlflow.set_tracking_uri(cfg.mlflow.tracking_uri)
+    shutdown_hook = start_or_connect_mlflow_server(cfg.mlflow.tracking_uri)
     mlflow.set_experiment(cfg.mlflow.experiment_name)
     run_evaluation(cfg)
 
