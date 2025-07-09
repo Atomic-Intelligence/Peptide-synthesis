@@ -1,3 +1,4 @@
+import subprocess
 import hydra
 import mlflow
 import polars as pl
@@ -7,6 +8,7 @@ from omegaconf import DictConfig
 from src.data.utils import DataProcessor
 from src.inference.inference_runner import InferenceRunner
 from src.logger import setup_logger
+from src.mlflow import start_or_connect_mlflow_server
 from src.models.synthetization_model_interface import (
     SynthetizationModelInterface,
     MlFlowTrainingRunInfo,
@@ -46,7 +48,7 @@ def train_model(
         )
 
     real_dataset, _ = (
-        data_processor.filter_peptides(non_zero_threshold=30.0)
+        data_processor.filter_peptides(non_zero_threshold=cfg.non_zero_threshold)
         .split_event_control(event=cfg.event)
         .get_processed_data()
     )[0]
@@ -98,7 +100,7 @@ def run_inference(
     config_name="pipeline.yaml",
 )
 def main(cfg: DictConfig):
-    mlflow.set_tracking_uri(cfg.ml_flow_tracking_uri)
+    shutdown_hook = start_or_connect_mlflow_server(cfg.ml_flow_tracking_uri)
 
     model = initialize_model(cfg)
 
@@ -112,7 +114,14 @@ def main(cfg: DictConfig):
         synthetic_data.write_csv(
             f"synthetic_{cfg.event}_sampled_{cfg.sampled_patients_num}.csv"
         )
+    
+    input("Press Enter to shut down the experiment viewing app...")
+    shutdown_hook()
+    logger.info("Shutting down the experiment viewing app...")
+    logger.info("Done!")
 
+
+        
 
 if __name__ == "__main__":
     main()
