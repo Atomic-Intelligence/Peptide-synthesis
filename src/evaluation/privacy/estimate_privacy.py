@@ -11,6 +11,7 @@ from src.data.utils import (
     CATEGORICAL_CLINICAL_COLUMNS,
     NUMERICAL_CLINICAL_COLUMNS,
 )
+from src.mlflow import start_or_connect_mlflow_server
 from loguru import logger
 
 
@@ -21,6 +22,8 @@ from loguru import logger
 )
 def main(cfg: DictConfig):
     cfg = cfg.evaluation
+    shutdown_hook = start_or_connect_mlflow_server(cfg.mlflow.tracking_uri)
+    
     authenticity_estimator: AuthenticityEstimator = hydra.utils.instantiate(
         cfg.authenticity_estimator
     )
@@ -71,7 +74,6 @@ def main(cfg: DictConfig):
     logger.success(f"Estimated Data Authenticity!")
     logger.info("Composing report...")
     figure = authenticity_estimator.visualize_authenticity(results=results)
-    mlflow.set_tracking_uri(cfg.mlflow.tracking_uri)
     mlflow.set_experiment(cfg.experiment_name)
     with mlflow.start_run() as run:
         logger.info(f"Logging report to MLflow")

@@ -296,7 +296,7 @@ The evaluation pipeline provides multiple analysis methods:
 
 ## MLflow Integration
 
-The project uses MLflow for experiment tracking:
+The project uses MLflow for experiment tracking with automatic local server setup:
 
 ```yaml
 # MLflow configuration
@@ -305,7 +305,14 @@ mlflow:
   experiment_name: ${experiment_name}
 ```
 
-To run the project, set up an MLflow instance and modify the tracking_uri in the configuration to point to it.
+### Automatic Local MLflow Server
+
+The system automatically handles MLflow server connectivity:
+
+1. **Remote Server**: If the configured `tracking_uri` is accessible, it connects to the remote MLflow server
+2. **Local Fallback**: If the remote server is unavailable, it automatically launches a local MLflow server at `http://127.0.0.1:5000`
+
+The local MLflow server is automatically started when needed and provides a shutdown hook for clean termination. You can view your experiments at the displayed URL during execution.
 
 ### Logged Metrics
 - Model training metrics
