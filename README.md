@@ -357,3 +357,60 @@ The `resources/` directory contains detailed technical reports on the project co
 ## License
 
 See LICENSE file for details.
+
+## Bootstraping:
+
+If bootstraping is enabled in `configuration.yaml`, script will evaluate the similarity between synthetic and original peptide datasets through a bootstrapping procedure:
+
+1. **Data Preparation**: Loads the datasets and selects columns with sufficient non-zero values for analysis.
+2. **Bootstrapping**: Iteratively samples subsets of synthetic data, comparing them to the original dataset using two metrics:
+   - **Kolmogorov-Smirnov (KS) p-value**: Measures distributional similarity.
+   - **Kullback-Leibler (KL) Divergence**: Quantifies differences in probability distributions.
+3. **Best Subset Selection**: Identifies the subset with the lowest KS results and improved KL divergence.
+4. **Output**:
+   - Saves the refined synthetic peptide subset, corresponding clinical data, and statistical metrics for documentation.
+
+This process ensures the synthetic dataset closely mirrors the original in key statistical properties.
+
+## Demo data
+
+In `/resources` directory, demo data can be seen. This data can be used for testing the provided code. When running the main script with the default configuration, the code should run for around 20 seconds and after that, your `/output` directory should contain the following files:
+
+- `synthetic_data_clinical_bootstrapped.csv`
+- `synthetic_data_clinical.csv`
+- `synthetic_data_peptides_bootstrapped.csv`
+- `synthetic_data_peptides_statistic.csv`
+- `synthetic_data_peptides.csv`.
+
+File with statistical properties contains peptide ids, kl divergences and ks p-values for corresponding peptides while other files contain synthesized data with the following columns:
+
+#### Clinical data:
+- Patient ID
+- Hospitalization duration
+- Sex (0-male)
+- Kidney disease
+- Diabetes
+- Hypertension
+- Blutdruck, diastolischM
+- Blutdruck, systolischM
+- GFR_CKD_EPI_M
+- BMI
+- Age
+
+#### Peptide data:
+- Patient ID
+- p1
+- p2
+- p3
+- p4
+- p5
+- p6
+- p7
+- p8
+- p9
+- p10
+- p11
+- p12
+- p13
+- p14
+- p15.

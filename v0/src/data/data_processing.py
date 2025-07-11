@@ -27,7 +27,6 @@ class HFProcessorForSynthetization(Processor):
         valid_clinical_ids = data.clinical.drop_nulls()[self.primary_key].to_list()
         valid_peptides_ids = data.peptides.drop_nulls()[self.primary_key].to_list()
         valid_ids = set(valid_clinical_ids).intersection(set(valid_peptides_ids))
-        print(len(valid_ids))
         data.clinical = data.clinical.filter(pl.col(self.primary_key).is_in(valid_ids))
         data.peptides = data.peptides.filter(pl.col(self.primary_key).is_in(valid_ids))
         return data

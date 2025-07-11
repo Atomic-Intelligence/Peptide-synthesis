@@ -6,7 +6,6 @@ import sdv
 import sdv.single_table.base
 
 import numpy as np
-import torch
 
 from v0.src.modeling.custom_copula_synthesizer import CustomGaussianCopulaSynthesizer
 
@@ -45,7 +44,6 @@ class Synthesizer:
 
         if self.random_seed is not None:
             np.random.seed(self.random_seed)
-            torch.manual_seed(self.random_seed)
 
         self.metadata = self._get_metadata(
             self.original_data.to_pandas(), self.peptides_to_model
