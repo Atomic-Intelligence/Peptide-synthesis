@@ -16,5 +16,5 @@ run_name: NE
 sampled_patients_num: 100
 non_zero_threshold: 90.0
 ml_flow_tracking_uri: http://10.100.111.210:5006
-primary_key: idAuswertung
+primary_key: ${data_processor.id_column}
 

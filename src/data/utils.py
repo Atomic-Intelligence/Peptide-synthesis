@@ -25,6 +25,7 @@ TIME_TO_EVENT_COLUMNS = [
     # "FU duration (to event or last visit)",
 ]
 
+
 def get_peptide_columns(df: pl.DataFrame) -> list[str]:
     pattern = re.compile("peptide", re.IGNORECASE)
     return [col for col in df.columns if re.search(pattern, col) is not None]
@@ -91,11 +92,12 @@ class DataProcessor:
     def __init__(
         self,
         dfs: Union[pl.DataFrame, List[pl.DataFrame]],
-        clinical_columns: Optional[List[str]]
+        id_column: str,
+        clinical_columns: Optional[List[str]],
     ):
         """Initialize the DataProcessor with a list of DataFrames and optional clinical columns."""
         self.dfs = [dfs] if isinstance(dfs, pl.DataFrame) else dfs
-
+        self.id_column = id_column
         self.dfs = [df.filter(df["event_type"] != "cad") for df in self.dfs]
 
         self.clinical_columns = clinical_columns
@@ -153,7 +155,7 @@ class DataProcessor:
             if missing_columns:
                 logger.warning(f"Clinical columns not found: {missing_columns}")
             filtered_columns.extend(valid_clinical_columns)
-        return df.select(filtered_columns + ["event_type"] + ["idAuswertung"])
+        return df.select(filtered_columns + ["event_type"] + [self.id_column])
 
     def select_clinical_columns(self) -> "DataProcessor":
         """Select only the clinical columns from the datasets."""
@@ -185,18 +187,21 @@ class DataProcessor:
         return self.processed_dfs
 
     def sample_patients_with_preserved_ratios(
-            self,
-            n_patients: int,
-            patient_id_col: str = "idAuswertung",
-            event_col: str = "event_type",
-            random_seed: int = None,
+        self,
+        n_patients: int,
+        event_col: str = "event_type",
+        random_seed: int = None,
     ) -> "DataProcessor":
-        logger.info(f"Sampling {n_patients} patients per dataset while preserving event ratios...")
+        logger.info(
+            f"Sampling {n_patients} patients per dataset while preserving event ratios..."
+        )
 
         sampled_dfs = []
 
         for i, df in enumerate(self.processed_dfs):
-            logger.info(f"Processing DataFrame {i + 1}/{len(self.processed_dfs)} with shape {df.shape}")
+            logger.info(
+                f"Processing DataFrame {i + 1}/{len(self.processed_dfs)} with shape {df.shape}"
+            )
 
             df = df.filter(pl.col(event_col) != "cad")
             logger.info(f"Filtered out 'cad' events. Remaining shape: {df.shape}")
@@ -205,7 +210,9 @@ class DataProcessor:
             if random_seed is not None:
                 pl.random.seed(random_seed + i)
 
-            patients_df = df.select([patient_id_col, event_col]).unique(subset=[patient_id_col])
+            patients_df = df.select([self.id_column, event_col]).unique(
+                subset=[self.id_column]
+            )
             event_counts = patients_df.group_by(event_col).agg(pl.len().alias("count"))
 
             print(event_counts)
@@ -213,7 +220,9 @@ class DataProcessor:
             total_patients = patients_df.height
 
             if n_patients >= total_patients:
-                logger.info(f"Requested {n_patients} exceeds or equals available {total_patients}, using all patients.")
+                logger.info(
+                    f"Requested {n_patients} exceeds or equals available {total_patients}, using all patients."
+                )
                 sampled_dfs.append(df)
                 continue
 
@@ -225,7 +234,7 @@ class DataProcessor:
                         .round(0)
                         .cast(pl.Int64)
                         .alias("target_count")
-                    )["target_count"].to_list()
+                    )["target_count"].to_list(),
                 )
             )
 
@@ -233,12 +242,16 @@ class DataProcessor:
             if total_target != n_patients:
                 largest_group = max(target_counts.items(), key=lambda x: x[1])[0]
                 target_counts[largest_group] += n_patients - total_target
-                logger.info(f"Adjusted count for event '{largest_group}' to correct rounding error.")
+                logger.info(
+                    f"Adjusted count for event '{largest_group}' to correct rounding error."
+                )
 
             sampled_patients_dfs = []
             for event_type, target_count in target_counts.items():
                 if target_count <= 0:
-                    logger.warning(f"Target count for event '{event_type}' is <= 0 — skipping sampling for this event.")
+                    logger.warning(
+                        f"Target count for event '{event_type}' is <= 0 — skipping sampling for this event."
+                    )
                     continue
 
                 event_patients = patients_df.filter(pl.col(event_col) == event_type)
@@ -246,34 +259,41 @@ class DataProcessor:
                 actual_count = min(target_count, available_count)
 
                 if actual_count <= 0:
-                    logger.warning(f"No patients available for event '{event_type}' "
-                                   f"(needed: {target_count}, available: {available_count}) — skipping.")
+                    logger.warning(
+                        f"No patients available for event '{event_type}' "
+                        f"(needed: {target_count}, available: {available_count}) — skipping."
+                    )
                     continue
 
                 sampled = event_patients.sample(n=actual_count, seed=random_seed)
                 sampled_patients_dfs.append(sampled)
 
             if sampled_patients_dfs:
-                selected_ids = pl.concat(sampled_patients_dfs)[patient_id_col].to_list()
-                sampled_df = df.filter(pl.col(patient_id_col).is_in(selected_ids))
+                selected_ids = pl.concat(sampled_patients_dfs)[self.id_column].to_list()
+                sampled_df = df.filter(pl.col(self.id_column).is_in(selected_ids))
                 sampled_dfs.append(sampled_df)
-                logger.success(f"Sampled {len(selected_ids)} unique patients for dataset {i + 1}")
+                logger.success(
+                    f"Sampled {len(selected_ids)} unique patients for dataset {i + 1}"
+                )
             else:
                 sampled_dfs.append(pl.DataFrame())
-                logger.warning(f"No patients sampled for dataset {i + 1}. Resulting DataFrame is empty.")
+                logger.warning(
+                    f"No patients sampled for dataset {i + 1}. Resulting DataFrame is empty."
+                )
 
         self.processed_dfs = sampled_dfs
         return self
 
 
 if __name__ == "__main__":
-    original_df = pl.read_csv(
-        "/data1/prostrat-ai/data/merged_peptide_and_clinical.csv"
-    )
+    original_df = pl.read_csv("/data1/prostrat-ai/data/merged_peptide_and_clinical.csv")
 
     # Initialize the DataProcessor with the DataFrame and wanted clinical columns
     processor = DataProcessor(
-        original_df, clinical_columns=CATEGORICAL_CLINICAL_COLUMNS + NUMERICAL_CLINICAL_COLUMNS + TIME_TO_EVENT_COLUMNS
+        original_df,
+        clinical_columns=CATEGORICAL_CLINICAL_COLUMNS
+        + NUMERICAL_CLINICAL_COLUMNS
+        + TIME_TO_EVENT_COLUMNS,
     )
 
     # Chain methods to perform multiple operations
