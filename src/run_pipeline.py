@@ -37,7 +37,6 @@ def train_model(
     data_processor_partial = instantiate(cfg.data_processor, _partial_=True)
     df = pl.read_csv(cfg.paths.real_dataset_path)
 
-
     data_processor: DataProcessor = data_processor_partial(
         dfs=[df]  # pl.read_csv(cfg.paths.real_dataset_path)]
     )
@@ -114,14 +113,12 @@ def main(cfg: DictConfig):
         synthetic_data.write_csv(
             f"synthetic_{cfg.event}_sampled_{cfg.sampled_patients_num}.csv"
         )
-    
+
     input("Press Enter to shut down the experiment viewing app...")
     shutdown_hook()
     logger.info("Shutting down the experiment viewing app...")
     logger.info("Done!")
 
-
-        
 
 if __name__ == "__main__":
     main()
