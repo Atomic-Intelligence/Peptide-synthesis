@@ -1,7 +1,6 @@
 _target_: src.data.utils.DataProcessor
 
-id_column: "Patient ID"
-
+id_column: "Patient ID" 
 
 clinical_columns:
     - Hospitalization duration
