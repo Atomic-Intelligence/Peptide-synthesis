@@ -1,4 +1,4 @@
-Patient ID,Hospitalization duration,Sex (0-male),Kidney disease,Diabetes,Hypertension,"Blutdruck, diastolischM","Blutdruck, systolischM",GFR_CKD_EPI_M,BMI,Age,p1,p2,p3,p4,p5,p6,p7,p8,p9,p10,p11,p12,p13,p14,p15,event_type
+Patient ID,Hospitalization duration,Sex (0-male),Kidney disease,Diabetes,Hypertension,"Blutdruck, diastolischM","Blutdruck, systolischM",GFR_CKD_EPI_M,BMI,Age,Peptide_1,Peptide_2,Peptide_3,Peptide_4,Peptide_5,Peptide_6,Peptide_7,Peptide_8,Peptide_9,Peptide_10,Peptide_11,Peptide_12,Peptide_13,Peptide_14,Peptide_15,event_type
 200,100.0,0,1,1,0,80.0,120.0,10,40.1,18,0.0,10.0,20.0,30.0,0.0,0.0,0.0,70.0,80.0,90.0,0.0,0.0,0.0,0.0,20.0,hf
 201,120.0,1,0,1,0,81.0,121.0,20,41.2,20,0.0,10.1,20.2,30.3,40.4,50.5,60.6,70.7,80.8,90.9,0.1,0.2,0.3,0.0,20.5,no_event
 202,140.0,0,1,0,1,82.0,122.0,30,42.3,30,100.0,200.0,300.0,30.0,40.0,50.0,60.0,800.0,90.0,100.0,110.0,120.0,130.0,0.0,150.0,no_event
