@@ -1,6 +1,6 @@
 _target_: src.data.utils.DataProcessor
 
-id_column: "Patient ID" 
+id_column: "idAuswertung" 
 
 clinical_columns:
     - "Geschlecht (1=female)"
