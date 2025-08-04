@@ -3,27 +3,15 @@ _target_: src.data.utils.DataProcessor
 id_column: "Patient ID" 
 
 clinical_columns:
-    - Hospitalization duration
-    - Sex (0-male)
-    - Kidney disease
-    - Diabetes
-    - Hypertension
-    - Blutdruck, diastolischM
-    - Blutdruck, systolischM
-    - GFR_CKD_EPI_M
-    - BMI
-    - Age
-    
-    
-    #- "Geschlecht (1=female)"
-    #- "Kidney disease"
-    #- "diabetes"
-    #- "CVD"
-    #- "hypertension"
-    #- "Blutdruck, diastolischM"
-    #- "Blutdruck, systolischM"
-    #- "GFR_CKD_EPI_M"
-    #- "BMI_M"
+    - "Geschlecht (1=female)"
+    - "Kidney disease"
+    - "diabetes"
+    - "CVD"
+    - "hypertension"
+    - "Blutdruck, diastolischM"
+    - "Blutdruck, systolischM"
+    - "GFR_CKD_EPI_M"
+    - "BMI_M"
     #- "Alter_M"
-    #- "time-to-CKDevent(to event or last visit)"
-    #- "FU duration_CAD_Hfevent (to event or last visit)"
+    - "time-to-CKDevent(to event or last visit)"
+    - "FU duration_CAD_Hfevent (to event or last visit)"

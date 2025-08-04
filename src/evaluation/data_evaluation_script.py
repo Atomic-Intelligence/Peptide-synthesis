@@ -64,7 +64,7 @@ def limit_cpu_usage(max_threads):
 
 
 def balance_event_types(
-        df1: pl.DataFrame, df2: pl.DataFrame, column: str = "event_type"
+    df1: pl.DataFrame, df2: pl.DataFrame, column: str = "event_type"
 ) -> pl.DataFrame:
     # Calculate distribution from df1
     df1_dist = (
@@ -193,7 +193,7 @@ def execute_tasks(executor, tasks):
 
 
 def run_evaluation_pipeline(
-        cfg: DictConfig, real_dataset, synthetic_dataset, classifier_models, executor
+    cfg: DictConfig, real_dataset, synthetic_dataset, classifier_models, executor
 ):
     """Run all evaluation tasks in a streamlined pipeline for all event types using a single process pool."""
     logger.info("Running evaluation pipeline...")
@@ -314,7 +314,9 @@ def run_evaluation_pipeline(
             )
             .select("GFR_CKD_EPI_M")
             .to_numpy(),
-            svm_ckd_score=classifier_reports[f"classifier_ckd_real"]["real"]["svm_score"],
+            svm_ckd_score=classifier_reports[f"classifier_ckd_real"]["real"][
+                "svm_score"
+            ],
         )
         survival_tasks[f"egfr_ckd_score_synthetic"] = partial(
             eGFR_CKD_score_analysis,
@@ -325,7 +327,9 @@ def run_evaluation_pipeline(
             )
             .select("GFR_CKD_EPI_M")
             .to_numpy(),
-            svm_ckd_score=classifier_reports[f"classifier_ckd_real"]["real"]["svm_score"],
+            svm_ckd_score=classifier_reports[f"classifier_ckd_real"]["real"][
+                "svm_score"
+            ],
         )
 
     # Execute survival tasks using the same executor
@@ -402,9 +406,6 @@ def run_evaluation(cfg: DictConfig):
         set(synthetic_dataset.columns).intersection(set(real_dataset.columns))
     )
 
-    if "FU duration (to event or last visit)" in columns:
-        columns.remove("FU duration (to event or last visit)")
-
     real_dataset = real_dataset.select(columns)
     real_dataset = real_dataset.fill_null(0.0)
     synthetic_dataset = synthetic_dataset.fill_null(0.0)
@@ -415,9 +416,7 @@ def run_evaluation(cfg: DictConfig):
     # Create a single process pool that will be used for all parallel tasks
     # Use the initializer to set thread limits for each worker
     with ProcessPoolExecutor(
-            max_workers=max_workers,
-            initializer=init_worker,
-            initargs=(threads_per_worker,)
+        max_workers=max_workers, initializer=init_worker, initargs=(threads_per_worker,)
     ) as executor:
         # Run the unified pipeline with the shared executor
         run_evaluation_pipeline(
@@ -426,7 +425,9 @@ def run_evaluation(cfg: DictConfig):
 
 
 @hydra.main(
-    version_base="1.1", config_path="../../configs/evaluation", config_name="data_eval_config.yaml"
+    version_base="1.1",
+    config_path="../../configs/evaluation",
+    config_name="data_eval_config.yaml",
 )
 def main(cfg: DictConfig) -> None:
     shutdown_hook = start_or_connect_mlflow_server(cfg.mlflow.tracking_uri)
