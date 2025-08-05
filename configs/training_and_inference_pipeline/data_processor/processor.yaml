@@ -12,6 +12,6 @@ clinical_columns:
     - "Blutdruck, systolischM"
     - "GFR_CKD_EPI_M"
     - "BMI_M"
-    #- "Alter_M"
+    - "Alter_M"
     - "time-to-CKDevent(to event or last visit)"
     - "FU duration_CAD_Hfevent (to event or last visit)"
