@@ -210,6 +210,7 @@ class GaussianCopulaBasic(SynthetizationModelInterface):
         generated_df_pl = pl.DataFrame(generated_data_np, schema=self.column_names)
 
         logger.info("Applying reverse preprocessing transformations...")
+        logger.info(f"Transf {self.preprocessing_transformations}")
         reversed_data_pd = self.sdv_preprocessor.reverse_preprocessing(
             generated_df_pl, self.preprocessing_transformations
         )

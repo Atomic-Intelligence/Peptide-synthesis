@@ -2845,7 +2845,7 @@
         "kind": 2,
         "importPath": "src.data.make_toy_data",
         "description": "src.data.make_toy_data",
-        "peekOfCode": "def make_toy_data(num_samples: int, num_peptide_cols: int = 30) -> pd.DataFrame:\n    columns = (\n        CATEGORICAL_CLINICAL_COLUMNS\n        + NUMERICAL_CLINICAL_COLUMNS\n        + TIME_TO_EVENT_COLUMNS\n        + [f\"Peptide_{i+1}\" for i in range(num_peptide_cols)]\n    )\n    columns.remove(\"idAuswertung\")\n    marginals = np.random.choice(\n        [stats.gamma(2), stats.lognorm(s=1), stats.expon],",
+        "peekOfCode": "def make_toy_data(num_samples: int, num_peptide_cols: int = 30) -> pd.DataFrame:\n    columns = (\n        CATEGORICAL_CLINICAL_COLUMNS\n        + NUMERICAL_CLINICAL_COLUMNS\n        + TIME_TO_EVENT_COLUMNS\n        + [f\"Peptide_{i+1}\" for i in range(num_peptide_cols)]\n    )\n    columns.remove(\"idAuswertung\")\n    numerical_columns = (\n        NUMERICAL_CLINICAL_COLUMNS",
         "detail": "src.data.make_toy_data",
         "documentation": {}
     },
