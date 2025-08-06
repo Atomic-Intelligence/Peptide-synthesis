@@ -233,7 +233,7 @@ class SDVPreprocessor:
         return numerical_series, conversion_params
 
     def convert_categorical_columns(
-        self, df: pl.DataFrame
+        self, df: pl.DataFrame, categorical_columns: Optional[list[str]] = None
     ) -> Tuple[pl.DataFrame, Dict[str, Dict[str, Any]]]:
         """
         Process all categorical (Utf8, Categorical) columns in the DataFrame using Polars.
@@ -251,10 +251,12 @@ class SDVPreprocessor:
         columns_to_convert: List[str] = []
 
         # Identify categorical columns (Utf8 or Categorical)
-        for col_name, dtype in df.schema.items():
-            if dtype in [pl.Utf8, pl.Categorical]:
-                columns_to_convert.append(col_name)
-
+        if categorical_columns is None:
+            for col_name, dtype in df.schema.items():
+                if dtype in [pl.Utf8, pl.Categorical]:
+                    columns_to_convert.append(col_name)
+        else:
+            columns_to_convert = categorical_columns
         # Apply conversion column by column
         # While Polars prefers whole-dataframe ops, this conversion is stateful per column
         for column in columns_to_convert:
@@ -323,7 +325,9 @@ class SDVPreprocessor:
 
         return categorical_series.alias(numerical_series.name)
 
-    def preprocess(self, df: pl.DataFrame) -> Tuple[pl.DataFrame, Dict[str, Any]]:
+    def preprocess(
+        self, df: pl.DataFrame, categorical_columns: Optional[list[str]] = None
+    ) -> Tuple[pl.DataFrame, Dict[str, Any]]:
         """
         Apply full preprocessing pipeline to the Polars DataFrame:
         1. Handle missing values
@@ -345,7 +349,7 @@ class SDVPreprocessor:
         # 2. Then convert categorical columns (including indicator columns)
         logger.info("Converting categorical columns...")
         df_processed, categorical_params = self.convert_categorical_columns(
-            df_missing_handled
+            df_missing_handled, categorical_columns=categorical_columns
         )
 
         logger.success("Categorical columns converted.")
