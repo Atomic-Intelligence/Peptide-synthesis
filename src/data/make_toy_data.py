@@ -46,6 +46,11 @@ def make_toy_data(num_samples: int, num_peptide_cols: int = 30) -> pd.DataFrame:
     )
     data = np.concatenate([categorical_data, numerical_data], axis=1)
     dataframe = pd.DataFrame(data=data, columns=columns)
+    event_type = np.random.choice(
+        ["no_event", "ckd", "hf"], p=[0.6, 0.15, 0.25], size=num_samples
+    )
+    dataframe["event_type"] = event_type
+    dataframe["idAuswertung"] = list(range(100, 100 + num_samples))
     return dataframe
 
 
@@ -54,4 +59,4 @@ if __name__ == "__main__":
 
     dataframe = make_toy_data(num_samples=2000, num_peptide_cols=30)
     print(dataframe)
-    dataframe.to_csv(f"{os.getcwd()}/example_data/toy_data.csv")
+    dataframe.to_csv(f"{os.getcwd()}/resources/toy_data.csv")
