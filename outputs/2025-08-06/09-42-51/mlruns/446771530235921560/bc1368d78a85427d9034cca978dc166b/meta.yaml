@@ -1,0 +1,15 @@
+artifact_uri: file:///home/fmirkovic/Peptide-synthesis/outputs/2025-08-06/09-42-51/mlruns/446771530235921560/bc1368d78a85427d9034cca978dc166b/artifacts
+end_time: 1754473373139
+entry_point_name: ''
+experiment_id: '446771530235921560'
+lifecycle_stage: active
+run_id: bc1368d78a85427d9034cca978dc166b
+run_name: NE
+run_uuid: bc1368d78a85427d9034cca978dc166b
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1754473372521
+status: 3
+tags: []
+user_id: fmirkovic

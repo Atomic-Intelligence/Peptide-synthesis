@@ -1,4 +1,4 @@
-root_data_path: /resources
+root_data_path: ./resources
 synthetic_data_dir: ${.root_data_path}/synthetic_datasets/
 
 
