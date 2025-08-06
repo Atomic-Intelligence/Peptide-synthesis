@@ -21,4 +21,13 @@ ml_flow_info:
   experiment_name: ${experiment_name}
   run_name: ${run_name}
 
+categorical_columns: 
+    - "Geschlecht (1=female)"
+    - "Kidney disease"
+    - "diabetes"
+    - "CVD"
+    - "hypertension"
+    - "event_type"
+
+
 copula_type: gaussian

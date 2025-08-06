@@ -54,6 +54,7 @@ class GaussianCopulaBasic(SynthetizationModelInterface):
         sdv_preprocessor: SDVPreprocessor,
         ml_flow_info: MlFlowTrainingRunInfo,
         copula_type: str = "gaussian",
+        categorical_columns: Optional[list[str]] = None,
     ):
         self.sdv_preprocessor = sdv_preprocessor
         self.preprocessing_transformations: Optional[dict] = None
@@ -66,6 +67,7 @@ class GaussianCopulaBasic(SynthetizationModelInterface):
         self._model_signature_to_save: Optional[ModelSignature] = None
 
         self.column_names: Optional[list[str]] = None
+        self.categorical_columns = categorical_columns
 
         super().__init__(ml_flow_info)
 
@@ -210,7 +212,6 @@ class GaussianCopulaBasic(SynthetizationModelInterface):
         generated_df_pl = pl.DataFrame(generated_data_np, schema=self.column_names)
 
         logger.info("Applying reverse preprocessing transformations...")
-        logger.info(f"Transf {self.preprocessing_transformations}")
         reversed_data_pd = self.sdv_preprocessor.reverse_preprocessing(
             generated_df_pl, self.preprocessing_transformations
         )
@@ -249,7 +250,7 @@ class GaussianCopulaBasic(SynthetizationModelInterface):
         real_dataset = self.convert_int_to_categorical(real_dataset)
 
         preprocessed_dataset_pl, transformations = self.sdv_preprocessor.preprocess(
-            real_dataset
+            real_dataset, categorical_columns=self.categorical_columns
         )
         self.preprocessing_transformations = transformations
         logger.success("Preprocessing complete.")

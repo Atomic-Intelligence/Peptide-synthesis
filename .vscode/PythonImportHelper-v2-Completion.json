@@ -3547,7 +3547,7 @@
         "kind": 6,
         "importPath": "src.models.copulas.gaussian_copula.gaussian_copula_basic",
         "description": "src.models.copulas.gaussian_copula.gaussian_copula_basic",
-        "peekOfCode": "class GaussianCopulaBasic(SynthetizationModelInterface):\n    def __init__(\n        self,\n        marginal_distribution_estimator: MarginalDistributionEstimator,\n        sdv_preprocessor: SDVPreprocessor,\n        ml_flow_info: MlFlowTrainingRunInfo,\n        copula_type: str = \"gaussian\",\n    ):\n        self.sdv_preprocessor = sdv_preprocessor\n        self.preprocessing_transformations: Optional[dict] = None",
+        "peekOfCode": "class GaussianCopulaBasic(SynthetizationModelInterface):\n    def __init__(\n        self,\n        marginal_distribution_estimator: MarginalDistributionEstimator,\n        sdv_preprocessor: SDVPreprocessor,\n        ml_flow_info: MlFlowTrainingRunInfo,\n        copula_type: str = \"gaussian\",\n        categorical_columns: Optional[list[str]] = None,\n    ):\n        self.sdv_preprocessor = sdv_preprocessor",
         "detail": "src.models.copulas.gaussian_copula.gaussian_copula_basic",
         "documentation": {}
     },
