@@ -2,7 +2,7 @@ root_data_path: ./resources
 synthetic_data_dir: ${.root_data_path}/synthetic_datasets/
 
 
-real_dataset_path: ${.root_data_path}/toy_data.csv 
+real_dataset_path: ${.root_data_path}/toy_data.csv
 synthetic_dataset_path: ${.synthetic_data_dir}
 
 run_dir: ./

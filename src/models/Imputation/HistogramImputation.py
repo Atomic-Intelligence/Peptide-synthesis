@@ -28,7 +28,10 @@ class HistogramImputation:
             self.col_densities[col] = hist / np.sum(hist)
         logger.success("Imputation done!")
 
-    def generate(self, n: int) -> tuple[str, np.ndarray]:
+    def generate(self, n: int) -> tuple[list[str], np.ndarray]:
+        if len(self.column_names) == 0:
+            return self.column_names, None
+
         generated_data = [
             choice(self.medians[col], p=self.col_densities[col], size=n)[:, None]
             for col in self.column_names

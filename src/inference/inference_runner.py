@@ -56,6 +56,7 @@ class InferenceRunner:
     def save_synthetic_dataset(self, synthetic_patients: pl.DataFrame):
         sd_path = self.synthetic_dataset_path / f"{uuid.uuid4()}.csv"
 
+        sd_path.parent.mkdir(parents=True, exist_ok=True)
         synthetic_patients.write_csv(sd_path)
         logger.success(f"Synthetic dataset saved to {self.synthetic_dataset_path}")
 

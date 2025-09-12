@@ -23,6 +23,7 @@ matplotlib-venn = "^1.1.2"
 pydantic = "^2.10.6"
 numpy = "2.1"
 statsmodels = "^0.14.4"
+notebook = "^7.4.5"
 
 
 [build-system]

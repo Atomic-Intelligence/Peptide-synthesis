@@ -103,6 +103,8 @@ class DataProcessor:
         self.clinical_columns = clinical_columns
         self.processed_dfs = self.dfs  # Start with the original datasets
 
+        self.dfs_for_imputation = []
+
         for df in self.processed_dfs:
             print(len(df))
 
@@ -132,6 +134,9 @@ class DataProcessor:
         self.processed_dfs = filtered_dfs
         return self
 
+    def get_data_for_imputation(self):
+        return self.dfs_for_imputation
+
     def _filter_peptides_in_df(
         self, df: pl.DataFrame, non_zero_threshold: float
     ) -> pl.DataFrame:
@@ -146,6 +151,10 @@ class DataProcessor:
         ]
 
         logger.info(f"Working with {len(filtered_columns)} peptides")
+
+        remaining_columns = set(peptide_columns) - set(filtered_columns)
+        self.dfs_for_imputation.append(df.select(remaining_columns))
+        logger.info(f"Remaining columns: {len(remaining_columns)} will be modeled using imputation.")
 
         if self.clinical_columns:
             valid_clinical_columns = [
