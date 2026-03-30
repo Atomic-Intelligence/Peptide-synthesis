@@ -29,7 +29,7 @@ def initialize_model(
 
 def train_model(
     cfg: DictConfig, model: SynthetizationModelInterface, sampled_patients_num: int = 0
-) -> tuple[SynthetizationModelInterface, HistogramImputation]:
+) -> tuple[SynthetizationModelInterface, HistogramImputation, pl.DataFrame]:
     logger.info("Running training...")
 
     logger.info("Loading real dataset...")
@@ -81,7 +81,7 @@ def train_model(
     histogram_imputation_model.fit(imputation_data)
     logger.success("Training completed!")
 
-    return model, histogram_imputation_model
+    return model, histogram_imputation_model, real_dataset
 
 
 def run_inference(
@@ -111,6 +111,66 @@ def run_inference(
     return synthetic_data
 
 
+def _load_real_data_for_eval(cfg: DictConfig) -> pl.DataFrame:
+    """Re-derive the processed real dataset for evaluation when training was skipped."""
+    data_processor_partial = instantiate(cfg.data_processor, _partial_=True)
+    df = pl.read_csv(cfg.paths.real_dataset_path)
+    data_processor = data_processor_partial(dfs=[df])
+    real_dataset, _ = (
+        data_processor.filter_peptides(non_zero_threshold=cfg.non_zero_threshold)
+        .split_event_control(event=cfg.event)
+        .get_processed_data()
+    )[0]
+    return real_dataset.drop(cfg.primary_key)
+
+
+def run_evaluation(
+    cfg: DictConfig,
+    real_df: pl.DataFrame,
+    synthetic_df: pl.DataFrame,
+) -> None:
+    """Run fidelity and privacy evaluation against a synthetic dataset.
+
+    Fidelity metrics (marginal, correlation, joint, two-sample classifier,
+    correlation uncertainty) are run via FidelityReport.  Privacy metrics
+    (DCR and Authenticity) are run via PrivacyReport, which shares a single
+    FeatureProcessor between both estimators to avoid redundant preprocessing.
+
+    Parameters
+    ----------
+    cfg :
+        Pipeline config.  An optional ``evaluation`` sub-key may carry
+        ``dcr_holdout_fraction`` and ``dcr_par_percentile``.
+    real_df :
+        Processed real dataset (same representation used for training).
+    synthetic_df :
+        Generated synthetic dataset to evaluate.
+    """
+    from src.evaluation.fidelity.fidelity_report import FidelityReport
+    from src.evaluation.privacy.privacy_report import PrivacyReport
+
+    eval_cfg = getattr(cfg, "evaluation", None)
+    dcr_holdout = getattr(eval_cfg, "dcr_holdout_fraction", 0.5) if eval_cfg else 0.5
+    dcr_par = getattr(eval_cfg, "dcr_par_percentile", 5.0) if eval_cfg else 5.0
+
+    logger.info("Running fidelity evaluation...")
+    fidelity_report = FidelityReport()
+    fidelity_results = fidelity_report.run(real_df, synthetic_df)
+    logger.success("Fidelity evaluation complete.")
+    for k, v in fidelity_results.summary().items():
+        logger.info(f"  {k}: {v:.4f}")
+
+    logger.info("Running privacy evaluation...")
+    privacy_report = PrivacyReport(
+        holdout_fraction=dcr_holdout,
+        par_percentile=dcr_par,
+    )
+    privacy_results = privacy_report.run(real_df, synthetic_df)
+    logger.success("Privacy evaluation complete.")
+    for k, v in privacy_results.summary().items():
+        logger.info(f"  {k}: {v}")
+
+
 @hydra.main(
     version_base="1.1",
     config_path="../configs/training_and_inference_pipeline",
@@ -121,12 +181,14 @@ def main(cfg: DictConfig):
 
     model = initialize_model(cfg)
 
+    real_df = None
     histogram_imputation_model = None
     if cfg.run_training:
-        model, histogram_imputation_model = train_model(
+        model, histogram_imputation_model, real_df = train_model(
             cfg=cfg, model=model, sampled_patients_num=cfg.sampled_patients_num
         )
 
+    synthetic_data = None
     if cfg.run_inference:
         synthetic_data = run_inference(
             cfg=cfg,
@@ -137,6 +199,16 @@ def main(cfg: DictConfig):
         synthetic_data.write_csv(
             f"synthetic_{cfg.event}_sampled_{cfg.sampled_patients_num}.csv"
         )
+
+    if cfg.run_evaluation:
+        if real_df is None:
+            real_df = _load_real_data_for_eval(cfg)
+        if synthetic_data is None:
+            raise ValueError(
+                "run_evaluation requires synthetic data. Enable run_inference or "
+                "set run_inference: true before run_evaluation: true."
+            )
+        run_evaluation(cfg=cfg, real_df=real_df, synthetic_df=synthetic_data)
 
     input("Press Enter to shut down the experiment viewing app...")
     shutdown_hook()

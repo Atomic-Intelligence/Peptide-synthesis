@@ -175,3 +175,4 @@ cython_debug/
 merged_peptide_and_clinical.csv
 
 resources/merged_peptide_and_clinical.csv
+outputs/**
