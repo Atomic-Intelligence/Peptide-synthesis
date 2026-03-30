@@ -159,7 +159,8 @@ cython_debug/
 *.xlsx
 
 # Do not ignore .csv files in the resources directory
-!resources/*.csv
+!resources/toy_data_sparse.csv
+!resources/toy_data.csv
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
@@ -172,3 +173,5 @@ cython_debug/
 **doodle.*
 
 merged_peptide_and_clinical.csv
+
+resources/merged_peptide_and_clinical.csv
