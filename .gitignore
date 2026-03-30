@@ -170,3 +170,5 @@ cython_debug/
 
 # Ignore doodle files
 **doodle.*
+
+resources/merged_peptide_and_clinical.csv
