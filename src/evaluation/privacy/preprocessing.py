@@ -32,14 +32,6 @@ class FeatureProcessor:
         self.numerical_feature_names: Optional[List[str]] = None
 
     def fit(self, dataframe: pl.DataFrame) -> "FeatureProcessor":
-        _string_dtypes = (pl.Utf8, pl.String, pl.Categorical)
-        auto_categorical = [
-            col for col in dataframe.columns
-            if col not in self.categorical_columns
-            and dataframe[col].dtype in _string_dtypes
-        ]
-        if auto_categorical:
-            self.categorical_columns = list(self.categorical_columns) + auto_categorical
         numerical_cols = [
             col for col in dataframe.columns if col not in self.categorical_columns
         ]

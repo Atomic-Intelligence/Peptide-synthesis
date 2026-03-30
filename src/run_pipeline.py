@@ -161,6 +161,17 @@ def run_evaluation(
     dcr_holdout = getattr(eval_cfg, "dcr_holdout_fraction", 0.5) if eval_cfg else 0.5
     dcr_par = getattr(eval_cfg, "dcr_par_percentile", 5.0) if eval_cfg else 5.0
 
+    # Drop string columns (e.g. event_type) — they are label/metadata columns that
+    # are constant within each split and break the numerical preprocessing in both
+    # fidelity and privacy estimators when the synthetic data is missing them or
+    # contains unseen values.
+    _string_dtypes = (pl.Utf8, pl.String, pl.Categorical)
+    _str_cols = [c for c in real_df.columns if real_df[c].dtype in _string_dtypes]
+    if _str_cols:
+        logger.info(f"Dropping string columns before evaluation: {_str_cols}")
+        real_df = real_df.drop(_str_cols)
+        synthetic_df = synthetic_df.drop([c for c in _str_cols if c in synthetic_df.columns])
+
     logger.info("Running fidelity evaluation...")
     fidelity_report = FidelityReport()
     fidelity_results = fidelity_report.run(real_df, synthetic_df)
