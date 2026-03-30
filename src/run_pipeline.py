@@ -1,4 +1,5 @@
 import hydra
+import mlflow
 import polars as pl
 from hydra.utils import instantiate
 from omegaconf import DictConfig
@@ -128,6 +129,7 @@ def run_evaluation(
     cfg: DictConfig,
     real_df: pl.DataFrame,
     synthetic_df: pl.DataFrame,
+    model: "SynthetizationModelInterface | None" = None,
 ) -> None:
     """Run fidelity and privacy evaluation against a synthetic dataset.
 
@@ -135,6 +137,9 @@ def run_evaluation(
     correlation uncertainty) are run via FidelityReport.  Privacy metrics
     (DCR and Authenticity) are run via PrivacyReport, which shares a single
     FeatureProcessor between both estimators to avoid redundant preprocessing.
+
+    Results are logged to MLflow as a nested evaluation run under the training
+    run when a model is provided.
 
     Parameters
     ----------
@@ -145,6 +150,9 @@ def run_evaluation(
         Processed real dataset (same representation used for training).
     synthetic_df :
         Generated synthetic dataset to evaluate.
+    model :
+        Fitted model whose MLflow run info is used to attach the evaluation
+        run.  When None, metrics are only logged to the console.
     """
     from src.evaluation.fidelity.fidelity_report import FidelityReport
     from src.evaluation.privacy.privacy_report import PrivacyReport
@@ -169,6 +177,31 @@ def run_evaluation(
     logger.success("Privacy evaluation complete.")
     for k, v in privacy_results.summary().items():
         logger.info(f"  {k}: {v}")
+
+    if model is not None:
+        try:
+            experiment_id, training_run_id = model.get_or_create_run(model.ml_flow_info)
+            with mlflow.start_run(
+                experiment_id=experiment_id, run_id=training_run_id
+            ):
+                with mlflow.start_run(
+                    experiment_id=experiment_id,
+                    run_name="evaluation",
+                    nested=True,
+                ):
+                    fidelity_metrics = fidelity_results.summary()
+                    if fidelity_metrics:
+                        mlflow.log_metrics(fidelity_metrics)
+                    privacy_metrics = {
+                        k: v
+                        for k, v in privacy_results.summary().items()
+                        if isinstance(v, (int, float))
+                    }
+                    if privacy_metrics:
+                        mlflow.log_metrics(privacy_metrics)
+            logger.success("Evaluation metrics logged to MLflow.")
+        except Exception as exc:
+            logger.error(f"Failed to log evaluation metrics to MLflow: {exc}")
 
 
 @hydra.main(
@@ -208,7 +241,7 @@ def main(cfg: DictConfig):
                 "run_evaluation requires synthetic data. Enable run_inference or "
                 "set run_inference: true before run_evaluation: true."
             )
-        run_evaluation(cfg=cfg, real_df=real_df, synthetic_df=synthetic_data)
+        run_evaluation(cfg=cfg, real_df=real_df, synthetic_df=synthetic_data, model=model)
 
     input("Press Enter to shut down the experiment viewing app...")
     shutdown_hook()
