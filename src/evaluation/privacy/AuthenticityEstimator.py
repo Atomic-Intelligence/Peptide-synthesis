@@ -15,6 +15,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from tqdm import tqdm
 
+from src.evaluation.privacy.preprocessing import FeatureProcessor  # shared utility
+
 # Define types for clarity
 Scaler = Union[QuantileTransformer, RobustScaler, StandardScaler, MinMaxScaler]
 
@@ -42,73 +44,6 @@ class AuthenticityResults(BaseModel):
             ),
             "feature_importance": self.feature_importance,
         }
-
-
-class FeatureProcessor:
-    """Handles transformation of features - separate from main estimation logic."""
-
-    def __init__(
-        self,
-        scaler: Scaler,
-        categorical_columns: List[str] = None,
-    ):
-        self.scaler = scaler
-        self.one_hot_encoder = OneHotEncoder(sparse_output=False, handle_unknown="warn")
-        self.categorical_columns = categorical_columns or []
-        self.fitted = False
-        self.feature_names = None
-
-    def fit(self, dataframe: pl.DataFrame) -> None:
-        """Fit the feature processor to the training data."""
-        numerical_cols = [
-            col for col in dataframe.columns if col not in self.categorical_columns
-        ]
-
-        # Fit the scaler on numerical features
-        self.scaler.fit(dataframe.select(numerical_cols).to_numpy())
-
-        # Fit the encoder on categorical features if any
-        if self.categorical_columns:
-            self.one_hot_encoder.fit(
-                dataframe.select(self.categorical_columns).to_numpy()
-            )
-
-        # Store the transformed feature names for interpretability
-        self.numerical_feature_names = numerical_cols
-        if self.categorical_columns:
-            self.categorical_feature_names = self.one_hot_encoder.get_feature_names_out(
-                self.categorical_columns
-            )
-            self.feature_names = np.concatenate(
-                [self.numerical_feature_names, self.categorical_feature_names]
-            )
-        else:
-            self.feature_names = np.array(self.numerical_feature_names)
-
-        self.fitted = True
-
-    def transform(self, dataframe: pl.DataFrame) -> np.ndarray:
-        """Transform input data using fitted scalers and encoders."""
-        if not self.fitted:
-            raise ValueError("Feature processor must be fitted before transform")
-
-        numerical_cols = [
-            col for col in dataframe.columns if col not in self.categorical_columns
-        ]
-        numerical = self.scaler.transform(dataframe.select(numerical_cols).to_numpy())
-
-        if not self.categorical_columns:
-            return numerical
-
-        categorical = self.one_hot_encoder.transform(
-            dataframe.select(self.categorical_columns).to_numpy()
-        )
-        return np.concatenate([numerical, categorical], axis=-1)
-
-    def fit_transform(self, dataframe: pl.DataFrame) -> np.ndarray:
-        """Fit and transform in one step."""
-        self.fit(dataframe)
-        return self.transform(dataframe)
 
 
 class AuthenticityEstimator:

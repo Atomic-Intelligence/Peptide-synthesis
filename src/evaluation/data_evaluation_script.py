@@ -12,7 +12,7 @@ from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig
 
-from src.mlflow import start_or_connect_mlflow_server
+from src.mlflow_utils import start_or_connect_mlflow_server
 
 # Import all your existing modules
 from src.data.PeptideDataset import (
@@ -37,6 +37,8 @@ from src.evaluation.classifiers.machine_learning_efficiency import (
     train_on_real_estimate_on_synthetic,
     train_on_synthetic_test_on_real,
 )
+from src.evaluation.fidelity.fidelity_report import FidelityReport
+from src.evaluation.analysis.correlation_uncertainty import CorrelationUncertaintyEstimator
 
 logging.basicConfig(level=logging.INFO)
 import warnings
@@ -192,6 +194,47 @@ def execute_tasks(executor, tasks):
     return results
 
 
+def _run_fidelity_report(
+    run_id: str,
+    real_dataset: pl.DataFrame,
+    synthetic_dataset: pl.DataFrame,
+    fidelity_cfg,
+) -> None:
+    """Run the FidelityReport and log all results to the active MLflow run."""
+    from sklearn.preprocessing import RobustScaler
+
+    run_corr_uncertainty = getattr(fidelity_cfg, "run_corr_uncertainty", True)
+    n_bootstrap = getattr(fidelity_cfg, "n_bootstrap", 200)
+    n_classifier_folds = getattr(fidelity_cfg, "n_classifier_folds", 5)
+    classifier_type = getattr(fidelity_cfg, "classifier_type", "random_forest")
+    corr_method = getattr(fidelity_cfg, "corr_method", "spearman")
+    max_correlation_cols = getattr(fidelity_cfg, "max_correlation_cols", 60)
+    max_corr_uncertainty_cols = getattr(fidelity_cfg, "max_corr_uncertainty_cols", 30)
+
+    report = FidelityReport(
+        categorical_columns=CATEGORICAL_CLINICAL_COLUMNS,
+        scaler=RobustScaler(),
+        run_corr_uncertainty=run_corr_uncertainty,
+        n_bootstrap=n_bootstrap,
+        n_classifier_folds=n_classifier_folds,
+        classifier_type=classifier_type,
+        corr_method=corr_method,
+        max_correlation_cols=max_correlation_cols,
+        max_corr_uncertainty_cols=max_corr_uncertainty_cols,
+    )
+
+    peptide_cols = get_peptide_columns(real_dataset)
+    results = report.run(real_dataset, synthetic_dataset, columns=peptide_cols)
+
+    with mlflow.start_run(run_id=run_id, nested=True):
+        mlflow.log_metrics(results.summary())
+        mlflow.log_text(results.to_json(), "fidelity_report.json")
+        for fig_name, fig in results.figures.items():
+            mlflow.log_figure(fig, f"fidelity/{fig_name}.png")
+
+    logger.success("Fidelity report logged to MLflow.")
+
+
 def run_evaluation_pipeline(
     cfg: DictConfig, real_dataset, synthetic_dataset, classifier_models, executor
 ):
@@ -278,6 +321,16 @@ def run_evaluation_pipeline(
         synthetic_dataset=synthetic_dataset,
         real_dataset=real_dataset,
     )
+
+    fidelity_cfg = getattr(cfg, "fidelity", None)
+    if fidelity_cfg is None or getattr(fidelity_cfg, "enabled", True):
+        tasks["fidelity_report"] = partial(
+            _run_fidelity_report,
+            run_id=run_id,
+            real_dataset=real_dataset,
+            synthetic_dataset=synthetic_dataset,
+            fidelity_cfg=fidelity_cfg if fidelity_cfg is not None else object(),
+        )
 
     # Execute all independent tasks using the shared executor
     reports = execute_tasks(executor, tasks)

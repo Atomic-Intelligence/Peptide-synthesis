@@ -142,7 +142,9 @@ class DataProcessor:
     ) -> pl.DataFrame:
         """Helper method to filter peptides in a single DataFrame."""
         peptide_columns = [
-            col for col in df.columns if re.search("peptide", col, re.IGNORECASE)
+            col
+            for col in df.columns
+            if re.search("peptide", col, re.IGNORECASE) and "missing" not in col
         ]
         filtered_columns = [
             col
@@ -154,7 +156,9 @@ class DataProcessor:
 
         remaining_columns = set(peptide_columns) - set(filtered_columns)
         self.dfs_for_imputation.append(df.select(remaining_columns))
-        logger.info(f"Remaining columns: {len(remaining_columns)} will be modeled using imputation.")
+        logger.info(
+            f"Remaining columns: {len(remaining_columns)} will be modeled using imputation."
+        )
 
         if self.clinical_columns:
             valid_clinical_columns = [

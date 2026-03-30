@@ -4,8 +4,20 @@ description: "Comparing Data Authenticity for Copula Generated Data for all case
 
 zero_percentage: 0.4
 
+# Distance to Closest Record
+run_dcr: true
+dcr:
+  holdout_fraction: 0.5     # fraction of real data used as holdout baseline
+  par_percentile: 5.0       # Privacy-at-Risk threshold (5th percentile of real holdout DCR)
+
+# Membership Inference Attack
+run_mia: true
+mia:
+  holdout_fraction: 0.2     # fraction of real data held out as non-members
+  attack_signal: dcr        # dcr | likelihood | both
+
 defaults:
-  - authenticity_estimator: knn_authenticity 
+  - authenticity_estimator: knn_authenticity
   - paths: paths
-  - mlflow: mlflow  
+  - mlflow: mlflow
   - _self_

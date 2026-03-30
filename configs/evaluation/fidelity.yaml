@@ -1,0 +1,17 @@
+# Fidelity metrics configuration
+# Consumed by FidelityReport via data_eval_config.yaml (fidelity: key)
+
+enabled: true
+
+# Correlation sub-modules
+corr_method: spearman         # pearson | spearman
+max_correlation_cols: 60      # cap to avoid O(n²) blowup
+
+# Bootstrap correlation uncertainty (slower — reduce n_bootstrap for speed)
+run_corr_uncertainty: true
+n_bootstrap: 200              # increase to 1000 for publication-quality CIs
+max_corr_uncertainty_cols: 30 # separate (smaller) cap for the bootstrap module
+
+# Two-sample classifier test
+n_classifier_folds: 5
+classifier_type: random_forest  # random_forest | logistic_regression | gradient_boosted

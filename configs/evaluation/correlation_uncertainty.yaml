@@ -1,0 +1,26 @@
+# Correlation uncertainty estimation — standalone config
+# Run with: python -m src.evaluation.analysis.correlation_uncertainty --real <path> --synth <path>
+
+method: spearman          # pearson | spearman
+n_bootstrap: 1000
+confidence_level: 0.95
+max_columns: 50           # cap to avoid O(n²) memory explosion (ignored when zero_fraction_range is set)
+seed: 42
+output_dir: "."
+
+# --- Column selection (choose ONE of the two options below) ---
+
+# Option 1: explicit list of column names.
+# Leave empty [] to fall back to all numeric columns (capped at max_columns).
+columns: []
+
+# Option 2: auto-select peptide columns by sparsity.
+# Selects all columns whose name contains `peptide_identifier` AND whose
+# fraction of zeros in the real dataset falls within [lo, hi].
+# Examples:
+#   zero_fraction_range: [0.0, 0.5]   -> low-sparsity peptides
+#   zero_fraction_range: [0.7, 0.9]   -> moderately sparse peptides
+#   zero_fraction_range: [0.9, 1.0]   -> highly sparse peptides
+# Set to null to disable.
+zero_fraction_range: [0.9, 1.0]
+peptide_identifier: "Peptide"

@@ -15,7 +15,9 @@ LOCAL_MLFLOW_SERVER_URI = f"http://{LOCAL_MLFLOW_SERVER_HOST}:{LOCAL_MLFLOW_SERV
 
 def start_or_connect_mlflow_server(uri: str) -> Callable[[], None]:
     try:
-        _ = requests.get(f"{uri}/api/health")
+        response = requests.get(f"{uri}/health", timeout=5)
+        response.raise_for_status()
+        mlflow.set_tracking_uri(uri)
         logger.info(f"You can view your experiments at {uri}")
         return lambda: None
         
@@ -25,8 +27,10 @@ def start_or_connect_mlflow_server(uri: str) -> Callable[[], None]:
             f"You can view your experiments at {LOCAL_MLFLOW_SERVER_URI}."
         )
 
+        import sys
+        mlflow_bin = str(__import__('pathlib').Path(sys.executable).parent / "mlflow")
         subprocess.Popen(
-            ["mlflow", "server", "--host", LOCAL_MLFLOW_SERVER_HOST, "--port", LOCAL_MLFLOW_SERVER_PORT],
+            [mlflow_bin, "server", "--host", LOCAL_MLFLOW_SERVER_HOST, "--port", LOCAL_MLFLOW_SERVER_PORT],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )

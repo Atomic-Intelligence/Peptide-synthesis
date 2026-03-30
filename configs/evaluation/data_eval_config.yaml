@@ -8,6 +8,17 @@ event_types:
     display_name: "Chronic Kidney Disease"
     time_to_event_column: "time-to-CKDevent(to event or last visit)"
 
+# Fidelity report settings (all modules run in parallel alongside existing tasks)
+fidelity:
+  enabled: true
+  corr_method: spearman
+  max_correlation_cols: 60
+  run_corr_uncertainty: true
+  n_bootstrap: 200              # raise to 1000 for production runs
+  max_corr_uncertainty_cols: 30
+  n_classifier_folds: 5
+  classifier_type: random_forest
+
 defaults:
   - _self_
   - svm_peptide_ids: ids.yaml

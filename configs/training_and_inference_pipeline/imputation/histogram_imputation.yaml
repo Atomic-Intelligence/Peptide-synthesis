@@ -1,0 +1,17 @@
+_target_: src.models.Imputation.HistogramImputation.HistogramImputation
+
+# Number of histogram bins per column.
+num_bins: 100
+
+# Sampling strategy used during generation:
+#   "uniform" (recommended) — sample uniformly within the chosen bin.
+#              Produces a piecewise-uniform (continuous) marginal distribution.
+#              Avoids the discrete-spike artefact of median sampling.
+#   "median"  — collapse each bin to its median and sample from that discrete set.
+#              Use only when imputed values must be exact observed data points.
+sampling_strategy: uniform
+
+# Number of parallel workers used during fit.
+# -1 uses all available CPU cores 
+# Uses threads; numpy releases the GIL so there is no pickling overhead.
+n_jobs: 1

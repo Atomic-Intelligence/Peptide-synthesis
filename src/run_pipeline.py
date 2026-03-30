@@ -6,7 +6,7 @@ from omegaconf import DictConfig
 from src.data.utils import DataProcessor
 from src.inference.inference_runner import InferenceRunner
 from src.logger import setup_logger
-from src.mlflow import start_or_connect_mlflow_server
+from src.mlflow_utils import start_or_connect_mlflow_server
 from src.models.Imputation.HistogramImputation import HistogramImputation
 from src.models.synthetization_model_interface import (
     SynthetizationModelInterface,
@@ -54,7 +54,9 @@ def train_model(
     imputation_data = data_processor.get_data_for_imputation()[0]
     logger.info(f"Imputation data shape: {imputation_data.shape}")
 
-    histogram_imputation_model = HistogramImputation(column_names=imputation_data.columns, num_bins=100)
+    histogram_imputation_model = instantiate(
+        cfg.imputation, column_names=imputation_data.columns
+    )
 
     patient_ids = (
         real_dataset[cfg.primary_key].unique().to_list()
@@ -96,9 +98,13 @@ def run_inference(
     synthetic_data = inference_runner.run(cfg.inference.n_synthetic_patients)
     logger.success(f"Inference completed. Synthetic data shape: {synthetic_data.shape}")
 
-    imputed_column_names, imputed_synthetic_data = histogram_imputation_model.generate(cfg.inference.n_synthetic_patients)
+    imputed_column_names, imputed_synthetic_data = histogram_imputation_model.generate(
+        cfg.inference.n_synthetic_patients
+    )
     if imputed_synthetic_data is not None:
-        logger.success(f"Histogram imputation completed. Data shape: {imputed_synthetic_data.shape}")
+        logger.success(
+            f"Histogram imputation completed. Data shape: {imputed_synthetic_data.shape}"
+        )
         df_imputed = pl.DataFrame(imputed_synthetic_data, schema=imputed_column_names)
         synthetic_data = pl.concat([synthetic_data, df_imputed], how="horizontal")
 
@@ -116,13 +122,17 @@ def main(cfg: DictConfig):
     model = initialize_model(cfg)
 
     histogram_imputation_model = None
-
     if cfg.run_training:
-        model, histogram_imputation_model = train_model(cfg=cfg, model=model, sampled_patients_num=cfg.sampled_patients_num)
+        model, histogram_imputation_model = train_model(
+            cfg=cfg, model=model, sampled_patients_num=cfg.sampled_patients_num
+        )
 
     if cfg.run_inference:
         synthetic_data = run_inference(
-            cfg=cfg, ml_flow_info=model.ml_flow_info, model=model, histogram_imputation_model=histogram_imputation_model
+            cfg=cfg,
+            ml_flow_info=model.ml_flow_info,
+            model=model,
+            histogram_imputation_model=histogram_imputation_model,
         )
         synthetic_data.write_csv(
             f"synthetic_{cfg.event}_sampled_{cfg.sampled_patients_num}.csv"
