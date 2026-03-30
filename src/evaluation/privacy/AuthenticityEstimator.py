@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from tqdm import tqdm
 
-from src.evaluation.privacy.preprocessing import FeatureProcessor  # shared utility
+from src.evaluation.privacy.preprocessing import FeatureProcessor, Scaler as _Scaler  # shared utility
 
 # Define types for clarity
 Scaler = Union[QuantileTransformer, RobustScaler, StandardScaler, MinMaxScaler]
@@ -57,8 +57,12 @@ class AuthenticityEstimator:
         authenticity_threshold: float = 1.0,
         verbose: bool = True,
         metric: str | Callable = "minkowski",
+        fitted_feature_processor: Optional[FeatureProcessor] = None,
     ):
-        self.feature_processor = FeatureProcessor(scaler, categorical_columns)
+        if fitted_feature_processor is not None:
+            self.feature_processor = fitted_feature_processor
+        else:
+            self.feature_processor = FeatureProcessor(scaler, categorical_columns)
         self.knn = NearestNeighbors(algorithm=algorithm, metric=metric)
         self.authenticity_threshold = authenticity_threshold
         self.verbose = verbose
@@ -69,7 +73,10 @@ class AuthenticityEstimator:
         """Fit the model on real data."""
         logger.info("Preparing real data for modeling")
         self.real_dataframe = real_dataframe
-        self.real_data = self.feature_processor.fit_transform(real_dataframe)
+        if self.feature_processor.fitted:
+            self.real_data = self.feature_processor.transform(real_dataframe)
+        else:
+            self.real_data = self.feature_processor.fit_transform(real_dataframe)
 
         logger.info("Fitting nearest neighbors model")
         self.knn.fit(self.real_data)

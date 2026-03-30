@@ -80,11 +80,15 @@ class DCREstimator:
         holdout_fraction: float = 0.5,
         par_percentile: float = 5.0,
         algorithm: str = "ball_tree",
+        fitted_feature_processor: Optional["FeatureProcessor"] = None,
     ):
-        self.feature_processor = FeatureProcessor(
-            scaler=scaler if scaler is not None else RobustScaler(),
-            categorical_columns=categorical_columns,
-        )
+        if fitted_feature_processor is not None:
+            self.feature_processor = fitted_feature_processor
+        else:
+            self.feature_processor = FeatureProcessor(
+                scaler=scaler if scaler is not None else RobustScaler(),
+                categorical_columns=categorical_columns,
+            )
         self.holdout_fraction = holdout_fraction
         self.par_percentile = par_percentile
         self.algorithm = algorithm
@@ -109,7 +113,10 @@ class DCREstimator:
         train_df = real_dataframe[train_idx.tolist()]
         holdout_df = real_dataframe[holdout_idx.tolist()]
 
-        self._train_data = self.feature_processor.fit_transform(train_df)
+        if self.feature_processor.fitted:
+            self._train_data = self.feature_processor.transform(train_df)
+        else:
+            self._train_data = self.feature_processor.fit_transform(train_df)
         self._holdout_data = self.feature_processor.transform(holdout_df)
 
         self._knn_train = NearestNeighbors(n_neighbors=1, algorithm=self.algorithm)
