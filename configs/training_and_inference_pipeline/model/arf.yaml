@@ -11,22 +11,9 @@ arf_params:
   num_trees: 35
   max_features: 2
 
-# ── Internal histogram imputation (for high-zero-percentage peptides) ─────────
-imputation_params:
-  num_bins: 100
-
-# Fraction of zeros above which a peptide column is routed to histogram
-# imputation rather than the ARF forest.
-zero_percentage_threshold: 0.4
-
 # ── Feature scaler ────────────────────────────────────────────────────────────
 # Options: sklearn.preprocessing.QuantileTransformer
 #          sklearn.preprocessing.StandardScaler
 #          sklearn.preprocessing.RobustScaler
 scaler:
   _target_: sklearn.preprocessing.QuantileTransformer
-
-# event_type is "all" here because the pipeline already filters by event via
-# the top-level `event` config key and split_event_control.  Set to a specific
-# event (hf / ckd / cad / no_event) only when running ARFPipeline standalone.
-event_type: all

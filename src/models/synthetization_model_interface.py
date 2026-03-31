@@ -30,11 +30,6 @@ class MlFlowTrainingRunInfo(BaseModel):
 
 
 class SynthetizationModelInterface(abc.ABC):
-    # Set to True in subclasses that handle sparse-column imputation internally
-    # (e.g. ARFPipeline).  When True, run_pipeline.py will not create or apply
-    # an external HistogramImputation model.
-    handles_imputation_internally: bool = False
-
     def __init__(
         self,
         ml_flow_info: MlFlowTrainingRunInfo,
