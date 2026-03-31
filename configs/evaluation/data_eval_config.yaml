@@ -19,6 +19,15 @@ fidelity:
   n_classifier_folds: 5
   classifier_type: random_forest
 
+# Privacy report settings (runs in parallel alongside fidelity report)
+privacy:
+  enabled: true
+  holdout_fraction: 0.5
+  par_percentile: 5.0
+  run_dcr: true
+  run_authenticity: true
+  authenticity_threshold: 1.0
+
 defaults:
   - _self_
   - svm_peptide_ids: ids.yaml
