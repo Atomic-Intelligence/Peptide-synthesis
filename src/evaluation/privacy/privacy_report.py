@@ -1,15 +1,18 @@
-"""PrivacyReport — orchestrator for DCR and Authenticity privacy metrics.
+"""PrivacyReport — orchestrator for DCR, Authenticity, and MIA privacy metrics.
 
 Fits a single FeatureProcessor on the real dataset and shares it between
 DCREstimator and AuthenticityEstimator, eliminating the redundant fit step
 that would otherwise occur when running both metrics independently.
 
-DCR and Authenticity are complementary, not redundant:
+DCR, Authenticity, and MIA are complementary:
   - DCR answers "are any synthetic records dangerously close to a real record?"
     (privacy risk, compared to a real-to-real holdout baseline)
   - Authenticity answers "do synthetic records look like plausible members of
     the real distribution?" (data quality, per-record ratio vs. nearest real
     neighbour's own nearest neighbour)
+  - MIA answers "can an adversary reliably tell which real records were used to
+    train the generative model?" (worst-case attacker perspective via a
+    logistic regression classifier trained on DCR-to-synthetic signals)
 
 The overlap is entirely in preprocessing (FeatureProcessor) and in the
 underlying synth→real kNN lookup, which this class computes once.
@@ -33,6 +36,7 @@ from sklearn.preprocessing import RobustScaler
 
 from src.evaluation.privacy.preprocessing import FeatureProcessor, Scaler
 from src.evaluation.privacy.dcr import DCREstimator, DCRResults
+from src.evaluation.privacy.membership_inference import MembershipInferenceAttack, MIAResults
 from src.evaluation.privacy.AuthenticityEstimator import (
     AuthenticityEstimator,
     AuthenticityResults,
@@ -43,6 +47,7 @@ from src.evaluation.privacy.AuthenticityEstimator import (
 class PrivacyResults:
     dcr: Optional[DCRResults] = None
     authenticity: Optional[AuthenticityResults] = None
+    mia: Optional[MIAResults] = None
 
     def summary(self) -> Dict[str, Any]:
         metrics: Dict[str, Any] = {}
@@ -52,11 +57,13 @@ class PrivacyResults:
             metrics.update(
                 {f"privacy/auth_{k}": v for k, v in self.authenticity.summary().items()}
             )
+        if self.mia is not None:
+            metrics.update({f"privacy/mia_{k}": v for k, v in self.mia.summary().items()})
         return metrics
 
 
 class PrivacyReport:
-    """Run DCR and Authenticity with a shared FeatureProcessor.
+    """Run DCR, Authenticity, and optionally MIA with a shared FeatureProcessor.
 
     Parameters
     ----------
@@ -74,6 +81,12 @@ class PrivacyReport:
         Whether to run the Authenticity estimator.
     authenticity_threshold :
         Ratio threshold used by AuthenticityEstimator.
+    run_mia :
+        Whether to run the Membership Inference Attack.
+    mia_holdout_fraction :
+        Fraction of real data withheld as non-members for MIA.  Default 0.2.
+    mia_attack_signal :
+        Attack signal for MIA: ``"dcr"`` | ``"likelihood"`` | ``"both"``.
     """
 
     def __init__(
@@ -85,6 +98,9 @@ class PrivacyReport:
         run_dcr: bool = True,
         run_authenticity: bool = True,
         authenticity_threshold: float = 1.0,
+        run_mia: bool = False,
+        mia_holdout_fraction: float = 0.2,
+        mia_attack_signal: str = "dcr",
     ):
         self.categorical_columns = categorical_columns or []
         self._scaler = scaler if scaler is not None else RobustScaler()
@@ -93,6 +109,9 @@ class PrivacyReport:
         self.run_dcr = run_dcr
         self.run_authenticity = run_authenticity
         self.authenticity_threshold = authenticity_threshold
+        self.run_mia = run_mia
+        self.mia_holdout_fraction = mia_holdout_fraction
+        self.mia_attack_signal = mia_attack_signal
 
     def run(self, real_df: pl.DataFrame, synth_df: pl.DataFrame) -> PrivacyResults:
         """Run enabled privacy metrics with a shared FeatureProcessor.
@@ -145,5 +164,18 @@ class PrivacyReport:
                 logger.success(f"PrivacyReport Authenticity: {results.authenticity.summary()}")
             except Exception as exc:
                 logger.error(f"PrivacyReport: Authenticity failed — {exc}")
+
+        if self.run_mia:
+            try:
+                mia = MembershipInferenceAttack(
+                    holdout_fraction=self.mia_holdout_fraction,
+                    attack_signal=self.mia_attack_signal,
+                    fitted_feature_processor=shared_fp,
+                )
+                mia.fit(real_df)
+                results.mia = mia.estimate(synth_df)
+                logger.success(f"PrivacyReport MIA: {results.mia.summary()}")
+            except Exception as exc:
+                logger.error(f"PrivacyReport: MIA failed — {exc}")
 
         return results

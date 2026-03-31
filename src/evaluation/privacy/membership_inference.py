@@ -82,6 +82,10 @@ class MembershipInferenceAttack:
         does not expose ``log_prob``, ``"likelihood"`` falls back to ``"dcr"``.
     algorithm :
         NearestNeighbors algorithm for DCR signal computation.
+    fitted_feature_processor :
+        A pre-fitted FeatureProcessor to reuse.  When provided, ``scaler`` and
+        ``categorical_columns`` are ignored.  Pass this from PrivacyReport to
+        share a single processor across all privacy estimators.
     """
 
     def __init__(
@@ -91,11 +95,15 @@ class MembershipInferenceAttack:
         holdout_fraction: float = 0.2,
         attack_signal: Literal["dcr", "likelihood", "both"] = "dcr",
         algorithm: str = "ball_tree",
+        fitted_feature_processor: Optional["FeatureProcessor"] = None,
     ):
-        self.feature_processor = FeatureProcessor(
-            scaler=scaler if scaler is not None else RobustScaler(),
-            categorical_columns=categorical_columns,
-        )
+        if fitted_feature_processor is not None:
+            self.feature_processor = fitted_feature_processor
+        else:
+            self.feature_processor = FeatureProcessor(
+                scaler=scaler if scaler is not None else RobustScaler(),
+                categorical_columns=categorical_columns,
+            )
         self.holdout_fraction = holdout_fraction
         self.attack_signal = attack_signal
         self.algorithm = algorithm
