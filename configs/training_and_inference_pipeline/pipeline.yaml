@@ -8,7 +8,7 @@ defaults:
 
 run_training: true
 run_inference: true
-run_evaluation: false
+run_evaluation: true
 
 event: no_event
 
