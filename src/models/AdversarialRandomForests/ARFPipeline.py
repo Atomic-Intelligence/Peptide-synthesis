@@ -40,6 +40,8 @@ Event = Literal["hf", "ckd", "cad", "no_event", "all"]
 
 
 class ARFPipeline(SynthetizationModelInterface):
+    handles_imputation_internally: bool = True
+
     def __init__(
         self,
         run_info: MlFlowTrainingRunInfo,
