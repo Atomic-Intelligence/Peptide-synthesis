@@ -30,7 +30,7 @@ def initialize_model(
 
 def train_model(
     cfg: DictConfig, model: SynthetizationModelInterface, sampled_patients_num: int = 0
-) -> tuple[SynthetizationModelInterface, HistogramImputation, pl.DataFrame]:
+) -> tuple[SynthetizationModelInterface, HistogramImputation | None, pl.DataFrame]:
     logger.info("Running training...")
 
     logger.info("Loading real dataset...")
@@ -52,13 +52,6 @@ def train_model(
         .get_processed_data()
     )[0]
 
-    imputation_data = data_processor.get_data_for_imputation()[0]
-    logger.info(f"Imputation data shape: {imputation_data.shape}")
-
-    histogram_imputation_model = instantiate(
-        cfg.imputation, column_names=imputation_data.columns
-    )
-
     patient_ids = (
         real_dataset[cfg.primary_key].unique().to_list()
         if cfg.primary_key in real_dataset.columns
@@ -79,7 +72,16 @@ def train_model(
     )
     logger.info("Training model...")
     model.fit(real_dataset, dataset_metadata)
-    histogram_imputation_model.fit(imputation_data)
+
+    histogram_imputation_model = None
+    if not model.handles_imputation_internally:
+        imputation_data = data_processor.get_data_for_imputation()[0]
+        logger.info(f"Imputation data shape: {imputation_data.shape}")
+        histogram_imputation_model = instantiate(
+            cfg.imputation, column_names=imputation_data.columns
+        )
+        histogram_imputation_model.fit(imputation_data)
+
     logger.success("Training completed!")
 
     return model, histogram_imputation_model, real_dataset
@@ -89,7 +91,7 @@ def run_inference(
     cfg: DictConfig,
     ml_flow_info: MlFlowTrainingRunInfo,
     model: SynthetizationModelInterface,
-    histogram_imputation_model: HistogramImputation,
+    histogram_imputation_model: HistogramImputation | None,
 ) -> pl.DataFrame:
     logger.info("Running inference...")
     inference_runner_partial = instantiate(cfg.inference, _partial_=True)
@@ -99,15 +101,16 @@ def run_inference(
     synthetic_data = inference_runner.run(cfg.inference.n_synthetic_patients)
     logger.success(f"Inference completed. Synthetic data shape: {synthetic_data.shape}")
 
-    imputed_column_names, imputed_synthetic_data = histogram_imputation_model.generate(
-        cfg.inference.n_synthetic_patients
-    )
-    if imputed_synthetic_data is not None:
-        logger.success(
-            f"Histogram imputation completed. Data shape: {imputed_synthetic_data.shape}"
+    if histogram_imputation_model is not None:
+        imputed_column_names, imputed_synthetic_data = histogram_imputation_model.generate(
+            cfg.inference.n_synthetic_patients
         )
-        df_imputed = pl.DataFrame(imputed_synthetic_data, schema=imputed_column_names)
-        synthetic_data = pl.concat([synthetic_data, df_imputed], how="horizontal")
+        if imputed_synthetic_data is not None:
+            logger.success(
+                f"Histogram imputation completed. Data shape: {imputed_synthetic_data.shape}"
+            )
+            df_imputed = pl.DataFrame(imputed_synthetic_data, schema=imputed_column_names)
+            synthetic_data = pl.concat([synthetic_data, df_imputed], how="horizontal")
 
     return synthetic_data
 

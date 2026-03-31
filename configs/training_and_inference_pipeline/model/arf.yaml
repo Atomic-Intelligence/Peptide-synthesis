@@ -1,28 +1,32 @@
+_target_: src.models.AdversarialRandomForests.ARFPipeline.ARFPipeline
 
-save_name: "arf_generated.csv"
+# MLflow run identity — resolved from the top-level pipeline config.
+run_info:
+  experiment_name: ${experiment_name}
+  run_name: ${run_name}
 
-description: "ARF for NO events with QuantileTransformer and Histogram imputation with 100 bins. Zero threshold for peptides is **0.6**"
-
-event_type: "no_event"
-
+# ── ARF hyper-parameters ──────────────────────────────────────────────────────
 arf_params:
   min_node_size: 5
-  num_trees: 35 #20 
+  num_trees: 35
   max_features: 2
 
+# ── Internal histogram imputation (for high-zero-percentage peptides) ─────────
 imputation_params:
   num_bins: 100
 
+# Fraction of zeros above which a peptide column is routed to histogram
+# imputation rather than the ARF forest.
 zero_percentage_threshold: 0.4
 
-
+# ── Feature scaler ────────────────────────────────────────────────────────────
+# Options: sklearn.preprocessing.QuantileTransformer
+#          sklearn.preprocessing.StandardScaler
+#          sklearn.preprocessing.RobustScaler
 scaler:
   _target_: sklearn.preprocessing.QuantileTransformer
 
-
-defaults:
-  - _self_
-  - paths: paths.yaml
-  - mlflow: mlflow.yaml
-  - hydra: hydra.yaml
-
+# event_type is "all" here because the pipeline already filters by event via
+# the top-level `event` config key and split_event_control.  Set to a specific
+# event (hf / ckd / cad / no_event) only when running ARFPipeline standalone.
+event_type: all

@@ -1,7 +1,7 @@
 defaults:
   - paths: paths
   - data_processor: processor
-  - model: gaussian_copula
+  - model: arf #gaussian_copula
   - inference: inference_runner
   - imputation: histogram_imputation
   - _self_
