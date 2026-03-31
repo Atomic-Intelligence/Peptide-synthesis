@@ -105,6 +105,9 @@ class ARFPipeline(SynthetizationModelInterface):
         logger.success("Adversarial training complete!")
         logger.info("Beginning density estimation...")
         stats = self.model.forde()
+        # arfpy bug: forge() uses integer indexing on factor_cols, but forde()
+        # leaves it with string column names as the index. Reset to RangeIndex.
+        self.model.factor_cols = self.model.factor_cols.reset_index(drop=True)
         logger.success(f"Density estimation complete!\n{stats}")
 
     def _generate(self, n: int) -> pl.DataFrame:
