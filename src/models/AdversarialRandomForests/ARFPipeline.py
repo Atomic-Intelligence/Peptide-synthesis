@@ -7,6 +7,11 @@ from typing import Union, Optional
 import mlflow
 import mlflow.artifacts
 import numpy as np
+
+# arfpy uses np.in1d which was removed in NumPy 2.0.
+if not hasattr(np, "in1d"):
+    np.in1d = lambda ar1, ar2, **kw: np.isin(ar1, ar2, **kw).ravel()
+
 import pandas as pd
 import polars as pl
 from arfpy import arf
