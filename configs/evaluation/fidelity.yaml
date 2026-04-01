@@ -15,3 +15,34 @@ max_corr_uncertainty_cols: 30 # separate (smaller) cap for the bootstrap module
 # Two-sample classifier test
 n_classifier_folds: 5
 classifier_type: random_forest  # random_forest | logistic_regression | gradient_boosted
+
+# ---------------------------------------------------------------------------
+# Effect size metrics (per-column magnitude of distribution shift)
+# ---------------------------------------------------------------------------
+# Set run_effect_size: false to disable the entire module.
+#
+# Continuous options:
+#   cohen_d              — standardized mean difference (pooled std); signed
+#   rank_biserial        — rank-biserial / Cliff's delta from Mann-Whitney U; signed
+#   median_abs_shift     — (median_synth − median_real) / MAD_real; signed, robust
+#   cles                 — P(synth > real), Common Language Effect Size; [0, 1]
+#   overlap_coef         — histogram overlap (OVL); 1 = identical, 0 = disjoint
+#   normalized_wasserstein — Wasserstein-1 / IQR_real; scale-free distance
+#
+# Categorical options:
+#   hellinger            — Hellinger distance between PMFs; [0, 1]
+#   js_divergence        — Jensen-Shannon divergence (base-2); [0, 1]
+#
+# Remove any metric name from the list to skip it.
+run_effect_size: true
+effect_size_metrics:
+  continuous:
+    - cohen_d
+    - rank_biserial
+    - median_abs_shift
+    - cles
+    - overlap_coef
+    - normalized_wasserstein
+  categorical:
+    - hellinger
+    - js_divergence

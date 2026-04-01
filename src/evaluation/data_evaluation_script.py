@@ -211,6 +211,10 @@ def _run_fidelity_report(
     corr_method = getattr(fidelity_cfg, "corr_method", "spearman")
     max_correlation_cols = getattr(fidelity_cfg, "max_correlation_cols", 60)
     max_corr_uncertainty_cols = getattr(fidelity_cfg, "max_corr_uncertainty_cols", 30)
+    run_effect_size = getattr(fidelity_cfg, "run_effect_size", True)
+    _effect_size_cfg = getattr(fidelity_cfg, "effect_size_metrics", None)
+    effect_size_continuous = getattr(_effect_size_cfg, "continuous", None) if _effect_size_cfg else None
+    effect_size_categorical = getattr(_effect_size_cfg, "categorical", None) if _effect_size_cfg else None
 
     report = FidelityReport(
         categorical_columns=CATEGORICAL_CLINICAL_COLUMNS,
@@ -222,6 +226,9 @@ def _run_fidelity_report(
         corr_method=corr_method,
         max_correlation_cols=max_correlation_cols,
         max_corr_uncertainty_cols=max_corr_uncertainty_cols,
+        run_effect_size=run_effect_size,
+        effect_size_continuous_metrics=effect_size_continuous,
+        effect_size_categorical_metrics=effect_size_categorical,
     )
 
     peptide_cols = get_peptide_columns(real_dataset)
@@ -250,6 +257,14 @@ def _run_privacy_report(
     run_dcr = getattr(privacy_cfg, "run_dcr", True)
     run_authenticity = getattr(privacy_cfg, "run_authenticity", True)
     authenticity_threshold = getattr(privacy_cfg, "authenticity_threshold", 1.0)
+    run_mia = getattr(privacy_cfg, "run_mia", False)
+    mia_holdout_fraction = getattr(privacy_cfg, "mia_holdout_fraction", 0.2)
+    mia_attack_signal = getattr(privacy_cfg, "mia_attack_signal", "dcr")
+    mia_n_folds = getattr(privacy_cfg, "mia_n_folds", 5)
+    run_reidentification = getattr(privacy_cfg, "run_reidentification", False)
+    reid_risk_threshold = getattr(privacy_cfg, "reid_risk_threshold", 0.5)
+    dcr_distance_metric = getattr(privacy_cfg, "dcr_distance_metric", "euclidean")
+    reid_distance_metric = getattr(privacy_cfg, "reid_distance_metric", "euclidean")
 
     report = PrivacyReport(
         categorical_columns=CATEGORICAL_CLINICAL_COLUMNS,
@@ -259,6 +274,14 @@ def _run_privacy_report(
         run_dcr=run_dcr,
         run_authenticity=run_authenticity,
         authenticity_threshold=authenticity_threshold,
+        run_mia=run_mia,
+        mia_holdout_fraction=mia_holdout_fraction,
+        mia_attack_signal=mia_attack_signal,
+        mia_n_folds=mia_n_folds,
+        run_reidentification=run_reidentification,
+        reid_risk_threshold=reid_risk_threshold,
+        dcr_distance_metric=dcr_distance_metric,
+        reid_distance_metric=reid_distance_metric,
     )
 
     peptide_cols = get_peptide_columns(real_dataset)

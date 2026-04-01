@@ -38,6 +38,7 @@ import matplotlib.pyplot as plt
 from sklearn.neighbors import NearestNeighbors
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score, roc_curve
+from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import RobustScaler
 from typing import List, Literal, Optional
 from pydantic import BaseModel, ConfigDict
@@ -82,6 +83,10 @@ class MembershipInferenceAttack:
         does not expose ``log_prob``, ``"likelihood"`` falls back to ``"dcr"``.
     algorithm :
         NearestNeighbors algorithm for DCR signal computation.
+    n_folds :
+        Number of folds for stratified k-fold cross-validation of the attack
+        classifier.  Default 5.  Using CV prevents the classifier from
+        overfitting to the attack dataset and gives a more honest AUC estimate.
     fitted_feature_processor :
         A pre-fitted FeatureProcessor to reuse.  When provided, ``scaler`` and
         ``categorical_columns`` are ignored.  Pass this from PrivacyReport to
@@ -95,6 +100,7 @@ class MembershipInferenceAttack:
         holdout_fraction: float = 0.2,
         attack_signal: Literal["dcr", "likelihood", "both"] = "dcr",
         algorithm: str = "ball_tree",
+        n_folds: int = 5,
         fitted_feature_processor: Optional["FeatureProcessor"] = None,
     ):
         if fitted_feature_processor is not None:
@@ -107,6 +113,7 @@ class MembershipInferenceAttack:
         self.holdout_fraction = holdout_fraction
         self.attack_signal = attack_signal
         self.algorithm = algorithm
+        self.n_folds = n_folds
 
         self._members_array: Optional[np.ndarray] = None
         self._nonmembers_array: Optional[np.ndarray] = None
@@ -205,10 +212,14 @@ class MembershipInferenceAttack:
             [np.ones(len(member_features)), np.zeros(len(nonmember_features))]
         )
 
-        # --- Train attack classifier ---
-        clf = LogisticRegression(max_iter=500, solver="lbfgs")
-        clf.fit(X, y)
-        scores = clf.predict_proba(X)[:, 1]
+        # --- Train attack classifier with k-fold CV ---
+        scores = np.zeros(len(y))
+        skf = StratifiedKFold(n_splits=self.n_folds, shuffle=True, random_state=42)
+
+        for train_idx, test_idx in skf.split(X, y):
+            clf = LogisticRegression(max_iter=500, solver="lbfgs")
+            clf.fit(X[train_idx], y[train_idx])
+            scores[test_idx] = clf.predict_proba(X[test_idx])[:, 1]
 
         attack_scores_members = scores[: len(member_features)]
         attack_scores_nonmembers = scores[len(member_features):]

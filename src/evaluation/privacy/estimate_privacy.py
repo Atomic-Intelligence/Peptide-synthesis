@@ -10,6 +10,7 @@ from sklearn.preprocessing import RobustScaler
 from src.evaluation.privacy.AuthenticityEstimator import AuthenticityEstimator
 from src.evaluation.privacy.dcr import DCREstimator
 from src.evaluation.privacy.membership_inference import MembershipInferenceAttack
+from src.evaluation.privacy.reidentification_risk import ReidentificationRiskEstimator
 from src.data.utils import (
     split_peptide_columns_by_zero_percentage,
     CATEGORICAL_CLINICAL_COLUMNS,
@@ -86,13 +87,16 @@ def main(cfg: DictConfig):
     run_dcr = getattr(cfg, "run_dcr", True)
     if run_dcr:
         logger.info("Running DCR estimation...")
+        dcr_cfg = cfg.get("dcr", {}) if hasattr(cfg, "get") else {}
         dcr_estimator = DCREstimator(
             scaler=RobustScaler(),
             categorical_columns=CATEGORICAL_CLINICAL_COLUMNS + ["event_type"],
-            holdout_fraction=getattr(cfg, "dcr", {}).get("holdout_fraction", 0.5)
-            if hasattr(cfg, "dcr") else 0.5,
-            par_percentile=getattr(cfg, "dcr", {}).get("par_percentile", 5.0)
-            if hasattr(cfg, "dcr") else 5.0,
+            holdout_fraction=dcr_cfg.get("holdout_fraction", 0.5)
+            if isinstance(dcr_cfg, dict) else getattr(dcr_cfg, "holdout_fraction", 0.5),
+            par_percentile=dcr_cfg.get("par_percentile", 5.0)
+            if isinstance(dcr_cfg, dict) else getattr(dcr_cfg, "par_percentile", 5.0),
+            distance_metric=dcr_cfg.get("distance_metric", "euclidean")
+            if isinstance(dcr_cfg, dict) else getattr(dcr_cfg, "distance_metric", "euclidean"),
         )
         dcr_estimator.fit(real_data)
         dcr_results = dcr_estimator.estimate(synth_data)
@@ -115,11 +119,35 @@ def main(cfg: DictConfig):
             if isinstance(mia_cfg, dict) else getattr(mia_cfg, "holdout_fraction", 0.2),
             attack_signal=mia_cfg.get("attack_signal", "dcr")
             if isinstance(mia_cfg, dict) else getattr(mia_cfg, "attack_signal", "dcr"),
+            n_folds=mia_cfg.get("n_folds", 5)
+            if isinstance(mia_cfg, dict) else getattr(mia_cfg, "n_folds", 5),
         )
         mia.fit(real_data)
         mia_results = mia.estimate(synth_data)
         mia_figure = mia.plot(mia_results)
         logger.success("MIA complete.")
+
+    # ------------------------------------------------------------------ #
+    #  4. Re-identification Risk                                           #
+    # ------------------------------------------------------------------ #
+    reid_results = None
+    reid_figure = None
+    run_reid = getattr(cfg, "run_reidentification", True)
+    if run_reid:
+        logger.info("Running Re-identification Risk estimation...")
+        reid_cfg = cfg.get("reidentification", {}) if hasattr(cfg, "get") else {}
+        reid = ReidentificationRiskEstimator(
+            scaler=RobustScaler(),
+            categorical_columns=CATEGORICAL_CLINICAL_COLUMNS + ["event_type"],
+            risk_threshold=reid_cfg.get("risk_threshold", 0.5)
+            if isinstance(reid_cfg, dict) else getattr(reid_cfg, "risk_threshold", 0.5),
+            distance_metric=reid_cfg.get("distance_metric", "euclidean")
+            if isinstance(reid_cfg, dict) else getattr(reid_cfg, "distance_metric", "euclidean"),
+        )
+        reid.fit(real_data)
+        reid_results = reid.estimate(synth_data)
+        reid_figure = reid.plot(reid_results)
+        logger.success("Re-identification Risk estimation complete.")
 
     # ------------------------------------------------------------------ #
     #  MLflow logging                                                      #
@@ -156,6 +184,12 @@ def main(cfg: DictConfig):
             mlflow.log_metrics(mia_results.summary())
             mlflow.log_figure(mia_figure, "mia_results.png")
             logger.info(f"MIA summary: {mia_results.summary()}")
+
+        # Re-identification
+        if reid_results is not None:
+            mlflow.log_metrics(reid_results.summary())
+            mlflow.log_figure(reid_figure, "reidentification_results.png")
+            logger.info(f"Re-identification summary: {reid_results.summary()}")
 
     logger.success("All done, Goodbye!")
 

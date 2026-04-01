@@ -7,11 +7,6 @@ from typing import Union, Optional
 import mlflow
 import mlflow.artifacts
 import numpy as np
-
-# arfpy uses np.in1d which was removed in NumPy 2.0.
-if not hasattr(np, "in1d"):
-    np.in1d = lambda ar1, ar2, **kw: np.isin(ar1, ar2, **kw).ravel()
-
 import pandas as pd
 import polars as pl
 from arfpy import arf
@@ -105,9 +100,6 @@ class ARFPipeline(SynthetizationModelInterface):
         logger.success("Adversarial training complete!")
         logger.info("Beginning density estimation...")
         stats = self.model.forde()
-        # arfpy bug: forge() uses integer indexing on factor_cols, but forde()
-        # leaves it with string column names as the index. Reset to RangeIndex.
-        self.model.factor_cols = self.model.factor_cols.reset_index(drop=True)
         logger.success(f"Density estimation complete!\n{stats}")
 
     def _generate(self, n: int) -> pl.DataFrame:
@@ -150,8 +142,3 @@ class ARFPipeline(SynthetizationModelInterface):
             with open(model_pickle_path, "wb") as f:
                 pickle.dump(self, f)
             mlflow.log_artifact(model_pickle_path, "arf_model")
-
-
-if __name__ == "__main__":
-    arf_obj = ARFPipeline()
-    arf_obj

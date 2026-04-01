@@ -1,63 +1,95 @@
-"""Bootstrapped correlation uncertainty estimation.
+"""Bootstrapped correlation uncertainty estimation — GPU-accelerated.
 
 For a user-specified set of columns, this module computes 95% (or user-defined)
 confidence intervals for each pairwise Pearson/Spearman correlation in a single
-dataset.  The CI width reflects how reliably each correlation can be estimated
-given the sample size — wide CIs indicate pairs where the correlation is
-uncertain, narrow CIs indicate well-estimated relationships.
+dataset.
 
-Steps
------
-1. Bootstrap the dataset B times → distribution of correlation estimates per pair.
-2. Apply Fisher z-transform before computing percentile CIs, then back-transform.
+Key differences from the CPU version
+--------------------------------------
+* Correlation matrices are computed as normalised matrix products — O(n_cols²)
+  work per bootstrap instead of O(n_cols²) individual scipy calls.  For 10 000
+  columns this is the difference between ~50 M function calls and a single GPU
+  matmul per bootstrap sample.
+* GPU acceleration via CuPy when available; falls back to vectorised NumPy on
+  CPU (still orders-of-magnitude faster than the old pair-by-pair loop).
+* Welford online accumulation of Fisher-z mean and variance across bootstraps —
+  only two (n_cols × n_cols) arrays are kept in memory at once instead of
+  (n_bootstrap × n_cols × n_cols).
+* Parametric CI from normal approximation in z-space.  This is statistically
+  valid: the whole point of the Fisher z-transform is that the sampling
+  distribution of r becomes approximately normal, so mean ± z·σ gives the same
+  CI as bootstrap percentiles without needing to store all samples.
+* Only pairs where ``ci_width < |corr|`` are written into the summary table —
+  the correlation is larger than its own uncertainty.  For 10 000 columns the
+  raw upper triangle contains ~50 M pairs; filtering avoids building a
+  500 MB DataFrame from noise.
 
 Outputs
 -------
 CorrelationUncertaintyResults
-    - corr_mean    : mean bootstrapped correlation matrix
-    - ci_lower     : lower CI bound matrix
-    - ci_upper     : upper CI bound matrix
-    - ci_width     : ci_upper - ci_lower
-    - column_names : list of analysed columns
-    - summary_table: polars DataFrame with one row per column pair
+    corr_mean    — (n_cols, n_cols) mean bootstrapped correlation matrix
+    ci_lower     — lower CI bound matrix
+    ci_upper     — upper CI bound matrix
+    ci_width     — ci_upper − ci_lower
+    column_names — list of analysed columns
+    summary_table — polars DataFrame with one row per *significant* pair
+                    (ci_width < |corr|)
 
-Visualisations
---------------
-- Heatmap of mean correlations
-- Heatmap of CI width (uncertainty)
+Memory note
+-----------
+For n_cols = 10 000 the four full matrices (corr_mean, ci_lower, ci_upper,
+ci_width) occupy ~1.6 GB of RAM as float32.  The summary_table contains only
+the filtered pairs and is typically much smaller.  Heatmap visualisation is
+skipped automatically for n_cols > 100 (individual cells are invisible anyway).
 """
 
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from typing import Dict, List, Optional, Literal, Tuple
+from dataclasses import dataclass
 
 import numpy as np
 import polars as pl
 import matplotlib.pyplot as plt
-from scipy.stats import spearmanr, pearsonr
-from typing import Dict, List, Optional, Literal, Tuple
-from dataclasses import dataclass
+from scipy.stats import norm as scipy_norm
 from loguru import logger
-from rich.progress import track
-
-# ---------------------------------------------------------------------------
-# Fisher z helpers
-# ---------------------------------------------------------------------------
 
 
-def _fisher_z(r: np.ndarray) -> np.ndarray:
-    """Fisher z-transform:  z = atanh(r), clipped away from ±1."""
-    return np.arctanh(np.clip(r, -0.9999, 0.9999))
+# ── GPU backend ────────────────────────────────────────────────────────────────
 
 
-def _fisher_z_inv(z: np.ndarray) -> np.ndarray:
-    return np.tanh(z)
+def _init_backend() -> Tuple:
+    """Return (xp, on_gpu).
+
+    Tries CuPy first, then falls back to NumPy.  The returned *xp* is the
+    array module to use; *on_gpu* is a bool indicating whether CuPy is active.
+    """
+    try:
+        import cupy as cp
+
+        cp.zeros(1)  # trigger context initialisation / verify device
+        logger.info("GPU backend: CuPy — CUDA acceleration enabled")
+        return cp, True
+    except Exception as exc:
+        logger.info(f"CuPy not available ({exc}); using vectorised NumPy on CPU")
+        return np, False
 
 
-# ---------------------------------------------------------------------------
-# Result dataclass
-# ---------------------------------------------------------------------------
+# ── Fisher z helpers ───────────────────────────────────────────────────────────
+
+
+def _fisher_z(xp, r):
+    """Fisher z-transform, clipped away from ±1."""
+    return xp.arctanh(xp.clip(r, -0.9999, 0.9999))
+
+
+def _fisher_z_inv(xp, z):
+    return xp.tanh(z)
+
+
+# ── Result dataclass ───────────────────────────────────────────────────────────
 
 
 @dataclass
@@ -65,21 +97,29 @@ class CorrelationUncertaintyResults:
     corr_mean: np.ndarray  # (n_cols, n_cols)
     ci_lower: np.ndarray
     ci_upper: np.ndarray
-    ci_width: np.ndarray  # ci_upper - ci_lower
+    ci_width: np.ndarray   # ci_upper − ci_lower
     column_names: List[str]
-    summary_table: pl.DataFrame  # one row per pair
+    summary_table: pl.DataFrame  # only pairs where ci_width < |corr|
 
     def summary(self) -> Dict[str, float]:
-        mask = np.triu(np.ones_like(self.ci_width, dtype=bool), k=1)
+        if len(self.summary_table) == 0:
+            return {
+                "correlation_uncertainty/mean_ci_width": float("nan"),
+                "correlation_uncertainty/max_ci_width": float("nan"),
+                "correlation_uncertainty/n_significant_pairs": 0,
+            }
         return {
-            "correlation_uncertainty/mean_ci_width": float(self.ci_width[mask].mean()),
-            "correlation_uncertainty/max_ci_width": float(self.ci_width[mask].max()),
+            "correlation_uncertainty/mean_ci_width": float(
+                self.summary_table["ci_width"].mean()
+            ),
+            "correlation_uncertainty/max_ci_width": float(
+                self.summary_table["ci_width"].max()
+            ),
+            "correlation_uncertainty/n_significant_pairs": len(self.summary_table),
         }
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+# ── Column selection helpers ───────────────────────────────────────────────────
 
 
 def _get_peptide_columns_by_zero_fraction(
@@ -87,17 +127,7 @@ def _get_peptide_columns_by_zero_fraction(
     zero_fraction_range: Tuple[float, float],
     peptide_identifier: str = "Peptide",
 ) -> List[str]:
-    """Return peptide columns whose zero-fraction falls within [lo, hi].
-
-    Parameters
-    ----------
-    df :
-        The dataset to inspect.
-    zero_fraction_range :
-        A ``(lo, hi)`` tuple, e.g. ``(0.0, 0.5)``.  Both bounds are inclusive.
-    peptide_identifier :
-        Sub-string used to detect peptide columns (default ``"Peptide"``).
-    """
+    """Return peptide columns whose zero-fraction falls within [lo, hi]."""
     lo, hi = zero_fraction_range
     peptide_cols = [c for c in df.columns if peptide_identifier in c]
     numeric_types = (pl.Float32, pl.Float64, pl.Int32, pl.Int64)
@@ -114,9 +144,51 @@ def _get_peptide_columns_by_zero_fraction(
     return selected
 
 
-# ---------------------------------------------------------------------------
-# Estimator
-# ---------------------------------------------------------------------------
+# ── GPU-accelerated correlation ────────────────────────────────────────────────
+
+
+def _rank_columns(xp, X):
+    """Column-wise ranks (1-based) via double argsort.
+
+    Parameters
+    ----------
+    X : array (n_samples, n_cols)
+
+    Returns
+    -------
+    ranks : array (n_samples, n_cols), dtype float32
+    """
+    return (xp.argsort(xp.argsort(X, axis=0), axis=0) + 1).astype(xp.float32)
+
+
+def _pearson_corr_matrix(xp, X):
+    """Pearson correlation via normalised matrix product.
+
+    Parameters
+    ----------
+    X : array (n_samples, n_cols)
+
+    Returns
+    -------
+    C : array (n_cols, n_cols), values in [-1, 1]
+    """
+    X_c = X - X.mean(axis=0)
+    norms = xp.sqrt((X_c ** 2).sum(axis=0))
+    # Avoid division by zero for constant / all-zero columns
+    norms = xp.where(norms == 0, xp.ones_like(norms), norms)
+    X_n = X_c / norms
+    C = X_n.T @ X_n
+    C = xp.clip(C, -1.0, 1.0)
+    C = xp.nan_to_num(C, nan=0.0)
+    return C
+
+
+def _spearman_corr_matrix(xp, X):
+    """Spearman correlation = Pearson on column ranks."""
+    return _pearson_corr_matrix(xp, _rank_columns(xp, X))
+
+
+# ── Estimator ─────────────────────────────────────────────────────────────────
 
 
 class CorrelationUncertaintyEstimator:
@@ -124,16 +196,13 @@ class CorrelationUncertaintyEstimator:
 
     Parameters
     ----------
-    method :
-        ``"spearman"`` or ``"pearson"``.
-    n_bootstrap :
+    method : "spearman" | "pearson"
+    n_bootstrap : int
         Number of bootstrap samples.  Default 1000.
-    confidence_level :
-        CI level.  Default 0.95 (→ 2.5th and 97.5th percentiles).
-    max_columns :
-        Cap to avoid O(n²) memory explosion.  Columns with the fewest zeros
-        are prioritised when trimming an explicit ``columns`` list.
-        Not applied when ``zero_fraction_range`` is used.
+    confidence_level : float
+        CI level.  Default 0.95 (→ ±1.96 σ in z-space).
+    max_columns : int
+        Column cap when not using zero_fraction_range.
     """
 
     def __init__(
@@ -148,9 +217,7 @@ class CorrelationUncertaintyEstimator:
         self.confidence_level = confidence_level
         self.max_columns = max_columns
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
+    # ── column selection ───────────────────────────────────────────────────
 
     def _select_columns(
         self,
@@ -159,15 +226,6 @@ class CorrelationUncertaintyEstimator:
         zero_fraction_range: Optional[Tuple[float, float]] = None,
         peptide_identifier: str = "Peptide",
     ) -> List[str]:
-        """Resolve which columns to analyse.
-
-        Priority:
-        1. If *zero_fraction_range* is given → auto-select peptide columns by
-           sparsity; *columns* and *max_columns* are ignored.
-        2. If *columns* is given → use that explicit list (trimmed to
-           *max_columns* by lowest zero-fraction if needed).
-        3. Otherwise → all numeric columns, trimmed to *max_columns*.
-        """
         if zero_fraction_range is not None:
             return _get_peptide_columns_by_zero_fraction(
                 df, zero_fraction_range, peptide_identifier
@@ -185,35 +243,67 @@ class CorrelationUncertaintyEstimator:
             numeric = sorted(numeric, key=lambda c: zero_fracs[c])[: self.max_columns]
         return numeric
 
-    def _corr_matrix(self, data: np.ndarray) -> np.ndarray:
-        n_cols = data.shape[1]
-        C = np.eye(n_cols)
-        for i in range(n_cols):
-            for j in range(i + 1, n_cols):
-                if self.method == "spearman":
-                    r, _ = spearmanr(data[:, i], data[:, j])
-                else:
-                    r, _ = pearsonr(data[:, i], data[:, j])
-                if np.isnan(r):
-                    r = 0.0
-                C[i, j] = C[j, i] = r
-        return C
+    # ── bootstrap loop ────────────────────────────────────────────────────
 
-    def _bootstrap_corr_distribution(
-        self, data: np.ndarray, rng: np.random.Generator
-    ) -> np.ndarray:
-        """Return array of shape (n_bootstrap, n_cols, n_cols)."""
-        n = data.shape[0]
-        n_cols = data.shape[1]
-        boot_corrs = np.empty((self.n_bootstrap, n_cols, n_cols))
-        for b in track(range(self.n_bootstrap), description=f"Bootrstapping..."):
+    def _bootstrap_streaming(
+        self,
+        xp,
+        on_gpu: bool,
+        data_gpu,
+        rng: np.random.Generator,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Accumulate Fisher-z mean and variance across bootstraps (Welford).
+
+        Uses Welford's online algorithm so memory usage is O(n_cols²) regardless
+        of n_bootstrap — only z_mean and z_M2 are kept in memory at any time.
+
+        Returns
+        -------
+        z_mean : np.ndarray (n_cols, n_cols)
+        z_var  : np.ndarray (n_cols, n_cols)  biased population variance
+        """
+        n, n_cols = data_gpu.shape
+        corr_fn = (
+            _spearman_corr_matrix if self.method == "spearman" else _pearson_corr_matrix
+        )
+
+        z_mean = xp.zeros((n_cols, n_cols), dtype=xp.float32)
+        z_M2 = xp.zeros((n_cols, n_cols), dtype=xp.float32)
+
+        for b in range(self.n_bootstrap):
             idx = rng.integers(0, n, size=n)
-            boot_corrs[b] = self._corr_matrix(data[idx])
-        return boot_corrs
 
-    # ------------------------------------------------------------------
-    # Main estimation
-    # ------------------------------------------------------------------
+            if on_gpu:
+                import cupy as cp
+
+                boot = data_gpu[cp.asarray(idx)]
+            else:
+                boot = data_gpu[idx]
+
+            C = corr_fn(xp, boot)
+            z = _fisher_z(xp, C)
+
+            # Welford update
+            delta = z - z_mean
+            z_mean = z_mean + delta / (b + 1)
+            delta2 = z - z_mean
+            z_M2 = z_M2 + delta * delta2
+
+            if (b + 1) % 100 == 0:
+                logger.info(f"  Bootstrap {b + 1}/{self.n_bootstrap}")
+
+        # Population variance (biased); fine for large n_bootstrap
+        z_var = z_M2 / self.n_bootstrap
+
+        if on_gpu:
+            import cupy as cp
+
+            z_mean = cp.asnumpy(z_mean)
+            z_var = cp.asnumpy(z_var)
+
+        return z_mean, z_var
+
+    # ── main estimation ────────────────────────────────────────────────────
 
     def estimate(
         self,
@@ -223,55 +313,84 @@ class CorrelationUncertaintyEstimator:
         peptide_identifier: str = "Peptide",
         random_seed: int = 42,
     ) -> CorrelationUncertaintyResults:
-        cols = self._select_columns(
-            df, columns, zero_fraction_range, peptide_identifier
-        )
+        cols = self._select_columns(df, columns, zero_fraction_range, peptide_identifier)
         if len(cols) < 2:
             raise ValueError(
                 "Need at least 2 numeric columns for correlation uncertainty."
             )
 
+        n_cols = len(cols)
+        n_pairs = n_cols * (n_cols - 1) // 2
         logger.info(
-            f"CorrelationUncertainty: {len(cols)} columns, {self.n_bootstrap} bootstraps, "
-            f"method={self.method}, CI={self.confidence_level:.0%}"
+            f"CorrelationUncertainty: {n_cols} columns ({n_pairs:,} pairs), "
+            f"{self.n_bootstrap} bootstraps, method={self.method}, "
+            f"CI={self.confidence_level:.0%}"
         )
 
-        data = df.select(cols).to_numpy().astype(float)
+        data = df.select(cols).to_numpy().astype(np.float32)
         rng = np.random.default_rng(random_seed)
 
-        logger.info("Bootstrapping...")
-        boot_corrs = self._bootstrap_corr_distribution(data, rng)
+        xp, on_gpu = _init_backend()
 
+        if on_gpu:
+            import cupy as cp
+
+            data_gpu = cp.asarray(data)
+        else:
+            data_gpu = data
+
+        logger.info("Bootstrapping (Welford streaming — constant memory)...")
+        z_mean, z_var = self._bootstrap_streaming(xp, on_gpu, data_gpu, rng)
+
+        # ── CI from normal approximation in z-space ────────────────────────
+        # Valid because Fisher z is approximately normal; equivalent to
+        # bootstrap percentile CIs without storing all bootstrap samples.
         alpha = 1 - self.confidence_level
-        lo_pct = 100 * alpha / 2
-        hi_pct = 100 * (1 - alpha / 2)
+        z_alpha = float(scipy_norm.ppf(1 - alpha / 2))  # e.g. 1.96 for 95 %
 
-        z = _fisher_z(boot_corrs)
-        corr_mean = _fisher_z_inv(z.mean(axis=0))
-        ci_lo = _fisher_z_inv(np.percentile(z, lo_pct, axis=0))
-        ci_hi = _fisher_z_inv(np.percentile(z, hi_pct, axis=0))
+        z_std = np.sqrt(np.maximum(z_var, 0.0))
+        ci_lo_z = z_mean - z_alpha * z_std
+        ci_hi_z = z_mean + z_alpha * z_std
+
+        corr_mean = np.tanh(z_mean)
+        ci_lo = np.tanh(ci_lo_z)
+        ci_hi = np.tanh(ci_hi_z)
         ci_width = ci_hi - ci_lo
 
-        n_cols = len(cols)
-        rows = []
-        for i in range(n_cols):
-            for j in range(i + 1, n_cols):
-                rows.append(
-                    {
-                        "col_a": cols[i],
-                        "col_b": cols[j],
-                        "corr": float(corr_mean[i, j]),
-                        "ci_lower": float(ci_lo[i, j]),
-                        "ci_upper": float(ci_hi[i, j]),
-                        "ci_width": float(ci_width[i, j]),
-                    }
-                )
+        # ── filter: keep only pairs where ci_width < |corr| ───────────────
+        triu_i, triu_j = np.triu_indices(n_cols, k=1)
+        corr_vals = corr_mean[triu_i, triu_j]
+        ci_lo_vals = ci_lo[triu_i, triu_j]
+        ci_hi_vals = ci_hi[triu_i, triu_j]
+        width_vals = ci_width[triu_i, triu_j]
 
-        summary_table = pl.DataFrame(rows)
+        significant = width_vals < np.abs(corr_vals)
+        sig_i = triu_i[significant]
+        sig_j = triu_j[significant]
+
         logger.info(
-            f"CorrelationUncertainty complete — {len(rows)} pairs, "
-            f"mean CI width = {summary_table['ci_width'].mean():.4f}"
+            f"Filtering: {significant.sum():,} / {n_pairs:,} pairs "
+            f"have ci_width < |corr|  ({100.0 * significant.mean():.1f} %)"
         )
+
+        summary_table = pl.DataFrame(
+            {
+                "col_a": [cols[i] for i in sig_i],
+                "col_b": [cols[j] for j in sig_j],
+                "corr": corr_vals[significant].tolist(),
+                "ci_lower": ci_lo_vals[significant].tolist(),
+                "ci_upper": ci_hi_vals[significant].tolist(),
+                "ci_width": width_vals[significant].tolist(),
+            }
+        )
+
+        if len(summary_table) > 0:
+            logger.info(
+                f"CorrelationUncertainty complete — {len(summary_table):,} significant pairs, "
+                f"mean CI width = {summary_table['ci_width'].mean():.4f}"
+            )
+        else:
+            logger.info("CorrelationUncertainty complete — 0 significant pairs")
 
         return CorrelationUncertaintyResults(
             corr_mean=corr_mean,
@@ -282,23 +401,31 @@ class CorrelationUncertaintyEstimator:
             summary_table=summary_table,
         )
 
-    # ------------------------------------------------------------------
-    # Visualisation
-    # ------------------------------------------------------------------
+    # ── visualisation ──────────────────────────────────────────────────────
 
     def plot(
         self,
         results: CorrelationUncertaintyResults,
         save_path: Optional[str] = None,
-    ) -> plt.Figure:
-        """Two heatmaps: mean correlations and CI width (uncertainty)."""
+    ) -> Optional[plt.Figure]:
+        """Two heatmaps: mean correlations and CI width (uncertainty).
+
+        Skipped automatically for n_cols > 100 — individual cells are invisible
+        at that scale and seaborn becomes prohibitively slow.
+        """
         import seaborn as sns
 
-        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
         n = len(results.column_names)
+        if n > 100:
+            logger.warning(
+                f"Skipping heatmap: {n} columns is too large to visualise meaningfully "
+                f"(limit is 100).  Use the summary_table CSV instead."
+            )
+            return None
+
+        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
         tick_labels = results.column_names if n <= 25 else []
 
-        # --- Mean correlation heatmap ---
         sns.heatmap(
             results.corr_mean,
             ax=axes[0],
@@ -313,7 +440,6 @@ class CorrelationUncertaintyEstimator:
         )
         axes[0].set_title("Mean bootstrapped correlation")
 
-        # --- CI width heatmap ---
         sns.heatmap(
             results.ci_width,
             ax=axes[1],
@@ -339,9 +465,7 @@ class CorrelationUncertaintyEstimator:
         return fig
 
 
-# ---------------------------------------------------------------------------
-# Standalone entry point
-# ---------------------------------------------------------------------------
+# ── Standalone entry point ─────────────────────────────────────────────────────
 
 
 def main() -> None:
@@ -349,14 +473,9 @@ def main() -> None:
         description="Bootstrapped correlation uncertainty for a single dataset.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    parser.add_argument("--data", type=str, required=True, help="Path to the dataset CSV.")
     parser.add_argument(
-        "--data", type=str, required=True, help="Path to the dataset CSV."
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default=".",
-        help="Directory where the plot and CSV summary are saved.",
+        "--output-dir", type=str, default=".", help="Directory for plot and CSV summary."
     )
     parser.add_argument(
         "--method", type=str, default="spearman", choices=["spearman", "pearson"]
@@ -369,12 +488,7 @@ def main() -> None:
         default=50,
         help="Column cap when not using --zero-fraction-range.",
     )
-    parser.add_argument(
-        "--columns",
-        nargs="*",
-        default=None,
-        help="Explicit list of column names to analyse.",
-    )
+    parser.add_argument("--columns", nargs="*", default=None)
     parser.add_argument(
         "--zero-fraction-range",
         nargs=2,
@@ -382,17 +496,12 @@ def main() -> None:
         default=None,
         metavar=("LO", "HI"),
         help=(
-            "Auto-select peptide columns whose fraction of zeros falls "
-            "in [LO, HI].  e.g. --zero-fraction-range 0.0 0.5. "
+            "Auto-select peptide columns whose fraction of zeros falls in [LO, HI]. "
+            "e.g. --zero-fraction-range 0.0 0.5. "
             "When set, --columns and --max-columns are ignored."
         ),
     )
-    parser.add_argument(
-        "--peptide-identifier",
-        type=str,
-        default="Peptide",
-        help="Sub-string used to identify peptide columns.",
-    )
+    parser.add_argument("--peptide-identifier", type=str, default="Peptide")
     parser.add_argument("--seed", type=int, default=111)
     args = parser.parse_args()
 
@@ -427,10 +536,9 @@ def main() -> None:
 
     plot_path = output_dir / "correlation_uncertainty.png"
     estimator.plot(results, save_path=str(plot_path))
-    logger.info(f"Plot saved to {plot_path}")
 
     for k, v in results.summary().items():
-        logger.info(f"{k}: {v:.4f}")
+        logger.info(f"{k}: {v}")
 
 
 if __name__ == "__main__":
