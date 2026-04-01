@@ -41,6 +41,10 @@ from src.evaluation.privacy.AuthenticityEstimator import (
     AuthenticityEstimator,
     AuthenticityResults,
 )
+from src.evaluation.privacy.reidentification_risk import (
+    ReidentificationRiskEstimator,
+    ReidentificationResults,
+)
 
 
 @dataclass
@@ -48,6 +52,7 @@ class PrivacyResults:
     dcr: Optional[DCRResults] = None
     authenticity: Optional[AuthenticityResults] = None
     mia: Optional[MIAResults] = None
+    reidentification: Optional[ReidentificationResults] = None
 
     def summary(self) -> Dict[str, Any]:
         metrics: Dict[str, Any] = {}
@@ -59,6 +64,10 @@ class PrivacyResults:
             )
         if self.mia is not None:
             metrics.update({f"privacy/mia_{k}": v for k, v in self.mia.summary().items()})
+        if self.reidentification is not None:
+            metrics.update(
+                {f"privacy/reid_{k}": v for k, v in self.reidentification.summary().items()}
+            )
         return metrics
 
 
@@ -87,6 +96,16 @@ class PrivacyReport:
         Fraction of real data withheld as non-members for MIA.  Default 0.2.
     mia_attack_signal :
         Attack signal for MIA: ``"dcr"`` | ``"likelihood"`` | ``"both"``.
+    mia_n_folds :
+        Number of folds for stratified k-fold CV of the MIA attack classifier.
+    run_reidentification :
+        Whether to run the Re-identification Risk estimator.
+    reid_risk_threshold :
+        Distance-ratio threshold for re-identification risk.  Default 0.5.
+    dcr_distance_metric :
+        Distance metric for DCR: ``"euclidean"`` or ``"gower"``.
+    reid_distance_metric :
+        Distance metric for re-identification risk: ``"euclidean"`` or ``"gower"``.
     """
 
     def __init__(
@@ -101,6 +120,11 @@ class PrivacyReport:
         run_mia: bool = False,
         mia_holdout_fraction: float = 0.2,
         mia_attack_signal: str = "dcr",
+        mia_n_folds: int = 5,
+        run_reidentification: bool = False,
+        reid_risk_threshold: float = 0.5,
+        dcr_distance_metric: str = "euclidean",
+        reid_distance_metric: str = "euclidean",
     ):
         self.categorical_columns = categorical_columns or []
         self._scaler = scaler if scaler is not None else RobustScaler()
@@ -112,6 +136,11 @@ class PrivacyReport:
         self.run_mia = run_mia
         self.mia_holdout_fraction = mia_holdout_fraction
         self.mia_attack_signal = mia_attack_signal
+        self.mia_n_folds = mia_n_folds
+        self.run_reidentification = run_reidentification
+        self.reid_risk_threshold = reid_risk_threshold
+        self.dcr_distance_metric = dcr_distance_metric
+        self.reid_distance_metric = reid_distance_metric
 
     def run(self, real_df: pl.DataFrame, synth_df: pl.DataFrame) -> PrivacyResults:
         """Run enabled privacy metrics with a shared FeatureProcessor.
@@ -141,7 +170,9 @@ class PrivacyReport:
                 dcr = DCREstimator(
                     holdout_fraction=self.holdout_fraction,
                     par_percentile=self.par_percentile,
-                    fitted_feature_processor=shared_fp,
+                    distance_metric=self.dcr_distance_metric,
+                    categorical_columns=self.categorical_columns,
+                    fitted_feature_processor=shared_fp if self.dcr_distance_metric != "gower" else None,
                 )
                 dcr.fit(real_df)
                 results.dcr = dcr.estimate(synth_df)
@@ -170,6 +201,7 @@ class PrivacyReport:
                 mia = MembershipInferenceAttack(
                     holdout_fraction=self.mia_holdout_fraction,
                     attack_signal=self.mia_attack_signal,
+                    n_folds=self.mia_n_folds,
                     fitted_feature_processor=shared_fp,
                 )
                 mia.fit(real_df)
@@ -177,5 +209,21 @@ class PrivacyReport:
                 logger.success(f"PrivacyReport MIA: {results.mia.summary()}")
             except Exception as exc:
                 logger.error(f"PrivacyReport: MIA failed — {exc}")
+
+        if self.run_reidentification:
+            try:
+                reid = ReidentificationRiskEstimator(
+                    risk_threshold=self.reid_risk_threshold,
+                    distance_metric=self.reid_distance_metric,
+                    categorical_columns=self.categorical_columns,
+                    fitted_feature_processor=shared_fp if self.reid_distance_metric != "gower" else None,
+                )
+                reid.fit(real_df)
+                results.reidentification = reid.estimate(synth_df)
+                logger.success(
+                    f"PrivacyReport Re-identification: {results.reidentification.summary()}"
+                )
+            except Exception as exc:
+                logger.error(f"PrivacyReport: Re-identification failed — {exc}")
 
         return results

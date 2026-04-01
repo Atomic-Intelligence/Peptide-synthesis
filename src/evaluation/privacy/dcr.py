@@ -24,6 +24,7 @@ from pydantic import BaseModel, ConfigDict
 from loguru import logger
 
 from src.evaluation.privacy.preprocessing import FeatureProcessor, Scaler
+from src.evaluation.privacy.gower_distance import GowerDistanceCalculator
 
 
 class DCRResults(BaseModel):
@@ -70,7 +71,12 @@ class DCREstimator:
         Privacy-at-Risk threshold.  Default 5 (5th percentile).
     algorithm :
         NearestNeighbors algorithm.  "ball_tree" is fast for medium-dimensional
-        data.
+        data.  Ignored when ``distance_metric="gower"``.
+    distance_metric :
+        Distance metric to use.  ``"euclidean"`` (default) uses
+        RobustScaler + one-hot encoding via FeatureProcessor, then Euclidean
+        NN search.  ``"gower"`` uses Gower's distance which handles mixed
+        numerical/categorical data natively without preprocessing.
     """
 
     def __init__(
@@ -80,21 +86,35 @@ class DCREstimator:
         holdout_fraction: float = 0.5,
         par_percentile: float = 5.0,
         algorithm: str = "ball_tree",
+        distance_metric: str = "euclidean",
         fitted_feature_processor: Optional["FeatureProcessor"] = None,
     ):
-        if fitted_feature_processor is not None:
-            self.feature_processor = fitted_feature_processor
-        else:
-            self.feature_processor = FeatureProcessor(
-                scaler=scaler if scaler is not None else RobustScaler(),
-                categorical_columns=categorical_columns,
+        self.distance_metric = distance_metric
+        self.categorical_columns = categorical_columns or []
+
+        if distance_metric == "gower":
+            self._gower = GowerDistanceCalculator(
+                categorical_columns=self.categorical_columns,
             )
+            self.feature_processor = None
+        else:
+            self._gower = None
+            if fitted_feature_processor is not None:
+                self.feature_processor = fitted_feature_processor
+            else:
+                self.feature_processor = FeatureProcessor(
+                    scaler=scaler if scaler is not None else RobustScaler(),
+                    categorical_columns=categorical_columns,
+                )
+
         self.holdout_fraction = holdout_fraction
         self.par_percentile = par_percentile
         self.algorithm = algorithm
 
         self._train_data: Optional[np.ndarray] = None
         self._holdout_data: Optional[np.ndarray] = None
+        self._train_df: Optional[pl.DataFrame] = None
+        self._holdout_df: Optional[pl.DataFrame] = None
         self._knn_train: Optional[NearestNeighbors] = None
         self._knn_holdout: Optional[NearestNeighbors] = None
 
@@ -113,22 +133,30 @@ class DCREstimator:
         train_df = real_dataframe[train_idx.tolist()]
         holdout_df = real_dataframe[holdout_idx.tolist()]
 
-        if self.feature_processor.fitted:
-            self._train_data = self.feature_processor.transform(train_df)
+        # Store dataframes for Gower mode
+        self._train_df = train_df
+        self._holdout_df = holdout_df
+
+        if self.distance_metric == "gower":
+            self._gower.fit(train_df)
         else:
-            self._train_data = self.feature_processor.fit_transform(train_df)
-        self._holdout_data = self.feature_processor.transform(holdout_df)
+            if self.feature_processor.fitted:
+                self._train_data = self.feature_processor.transform(train_df)
+            else:
+                self._train_data = self.feature_processor.fit_transform(train_df)
+            self._holdout_data = self.feature_processor.transform(holdout_df)
 
-        self._knn_train = NearestNeighbors(n_neighbors=1, algorithm=self.algorithm)
-        self._knn_train.fit(self._train_data)
+            self._knn_train = NearestNeighbors(n_neighbors=1, algorithm=self.algorithm)
+            self._knn_train.fit(self._train_data)
 
-        # For the holdout baseline we fit a separate index on train as well —
-        # the holdout records query this index so they are never their own
-        # nearest neighbour.
-        self._knn_holdout = self._knn_train
+            # For the holdout baseline we fit a separate index on train as well —
+            # the holdout records query this index so they are never their own
+            # nearest neighbour.
+            self._knn_holdout = self._knn_train
 
         logger.info(
-            f"DCREstimator fitted: {len(train_df)} training / {len(holdout_df)} holdout real records."
+            f"DCREstimator fitted ({self.distance_metric}): "
+            f"{len(train_df)} training / {len(holdout_df)} holdout real records."
         )
         return self
 
@@ -138,20 +166,35 @@ class DCREstimator:
 
     def estimate(self, synthetic_dataframe: pl.DataFrame) -> DCRResults:
         """Compute DCR for synthetic data and the real holdout baseline."""
-        if self._knn_train is None:
-            raise RuntimeError("Call fit() before estimate().")
+        if self.distance_metric == "gower":
+            if not self._gower.fitted:
+                raise RuntimeError("Call fit() before estimate().")
 
-        synth_array = self.feature_processor.transform(synthetic_dataframe)
+            # Gower: compute NN distances directly on dataframes
+            dcr_synth_2d, _ = self._gower.nearest_neighbor_distances(
+                synthetic_dataframe, self._train_df, n_neighbors=1,
+            )
+            dcr_synth = dcr_synth_2d.flatten()
 
-        # Synthetic → real (training half)
-        dcr_synth, _ = self._knn_train.kneighbors(synth_array, n_neighbors=1)
-        dcr_synth = dcr_synth.flatten()
+            dcr_holdout_2d, _ = self._gower.nearest_neighbor_distances(
+                self._holdout_df, self._train_df, n_neighbors=1,
+            )
+            dcr_holdout = dcr_holdout_2d.flatten()
+        else:
+            if self._knn_train is None:
+                raise RuntimeError("Call fit() before estimate().")
 
-        # Holdout real → real (training half)
-        dcr_holdout, _ = self._knn_holdout.kneighbors(
-            self._holdout_data, n_neighbors=1
-        )
-        dcr_holdout = dcr_holdout.flatten()
+            synth_array = self.feature_processor.transform(synthetic_dataframe)
+
+            # Synthetic → real (training half)
+            dcr_synth, _ = self._knn_train.kneighbors(synth_array, n_neighbors=1)
+            dcr_synth = dcr_synth.flatten()
+
+            # Holdout real → real (training half)
+            dcr_holdout, _ = self._knn_holdout.kneighbors(
+                self._holdout_data, n_neighbors=1
+            )
+            dcr_holdout = dcr_holdout.flatten()
 
         median_synth = float(np.median(dcr_synth))
         median_holdout = float(np.median(dcr_holdout))

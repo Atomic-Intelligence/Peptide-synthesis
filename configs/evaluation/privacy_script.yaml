@@ -9,12 +9,20 @@ run_dcr: true
 dcr:
   holdout_fraction: 0.5     # fraction of real data used as holdout baseline
   par_percentile: 5.0       # Privacy-at-Risk threshold (5th percentile of real holdout DCR)
+  distance_metric: euclidean # euclidean | gower
 
 # Membership Inference Attack
 run_mia: true
 mia:
   holdout_fraction: 0.2     # fraction of real data held out as non-members
   attack_signal: dcr        # dcr | likelihood | both
+  n_folds: 5                # stratified k-fold CV for attack classifier
+
+# Re-identification Risk
+run_reidentification: true
+reidentification:
+  risk_threshold: 0.5       # distance-ratio threshold for at-risk classification
+  distance_metric: euclidean # euclidean | gower
 
 defaults:
   - authenticity_estimator: knn_authenticity
