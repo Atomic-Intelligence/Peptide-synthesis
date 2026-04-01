@@ -6,3 +6,14 @@ real_dataset_path: ${.root_data_path}/merged_peptide_and_clinical.csv
 synthetic_dataset_path: ${.synthetic_data_dir}
 
 run_dir: ./
+effect_size_metrics:
+  continuous:
+    - cohen_d
+    - rank_biserial
+    - median_abs_shift
+    - cles
+    - overlap_coef
+    - normalized_wasserstein
+  categorical:
+    - hellinger
+    - js_divergence
