@@ -158,9 +158,11 @@ def _normalized_wasserstein(a: np.ndarray, b: np.ndarray) -> float:
     Makes the metric scale-free so it is comparable across columns.
     """
     w = wasserstein_distance(a, b)
+
     iqr_a = float(iqr(a))
     if iqr_a < 1e-12:
         return 0.0
+
     return float(w / iqr_a)
 
 
@@ -180,8 +182,10 @@ def _aligned_pmfs(
         counts = {c: 0 for c in categories}
         for v in arr:
             counts[v] = counts.get(v, 0) + 1
-        return np.array([counts[c] / n_a if arr is col_a else counts[c] / n_b
-                         for c in categories], dtype=float)
+        return np.array(
+            [counts[c] / n_a if arr is col_a else counts[c] / n_b for c in categories],
+            dtype=float,
+        )
 
     # rebuild cleanly to avoid closure bug
     a_counts = {c: 0 for c in categories}
@@ -237,6 +241,10 @@ class ColumnEffectSizeResult:
     hellinger: Optional[float] = None
     js_divergence: Optional[float] = None
 
+    # Composite divergence score (0 = identical, 1 = maximally divergent)
+    # Continuous: 1 - overlap_coef; Categorical: hellinger
+    divergence_score: Optional[float] = None
+
 
 @dataclass
 class EffectSizeResults:
@@ -256,6 +264,10 @@ class EffectSizeResults:
     mean_hellinger: Optional[float] = None
     mean_js_divergence: Optional[float] = None
 
+    # Top-5 most / least divergent columns by divergence_score
+    most_divergent: List[ColumnEffectSizeResult] = field(default_factory=list)
+    least_divergent: List[ColumnEffectSizeResult] = field(default_factory=list)
+
     def summary(self) -> Dict[str, float]:
         """Flat dict of headline effect size metrics for mlflow.log_metrics()."""
         out: Dict[str, float] = {}
@@ -268,6 +280,47 @@ class EffectSizeResults:
             if val is not None:
                 out[f"fidelity/effect_size/{metric}"] = val
         return out
+
+    def to_dataframe(self) -> pl.DataFrame:
+        """Return a Polars DataFrame with one row per column and all metrics.
+
+        Sorted by ``divergence_score`` descending (most divergent first).
+        """
+        rows = []
+        for r in self.per_column:
+            rows.append(
+                {
+                    "column": r.column,
+                    "type": "categorical" if r.is_categorical else "continuous",
+                    "divergence_score": r.divergence_score,
+                    "cohen_d": r.cohen_d,
+                    "rank_biserial": r.rank_biserial,
+                    "median_abs_shift": r.median_abs_shift,
+                    "cles": r.cles,
+                    "overlap_coef": r.overlap_coef,
+                    "normalized_wasserstein": r.normalized_wasserstein,
+                    "hellinger": r.hellinger,
+                    "js_divergence": r.js_divergence,
+                }
+            )
+        if not rows:
+            return pl.DataFrame()
+        schema = {
+            "column": pl.Utf8,
+            "type": pl.Utf8,
+            "divergence_score": pl.Float64,
+            "cohen_d": pl.Float64,
+            "rank_biserial": pl.Float64,
+            "median_abs_shift": pl.Float64,
+            "cles": pl.Float64,
+            "overlap_coef": pl.Float64,
+            "normalized_wasserstein": pl.Float64,
+            "hellinger": pl.Float64,
+            "js_divergence": pl.Float64,
+        }
+        return pl.DataFrame(rows, schema=schema).sort(
+            "divergence_score", descending=True, nulls_last=True
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -297,10 +350,14 @@ class EffectSizeEstimator:
         categorical_columns: Optional[List[str]] = None,
     ):
         self.continuous_metrics: List[str] = (
-            list(continuous_metrics) if continuous_metrics is not None else DEFAULT_CONTINUOUS
+            list(continuous_metrics)
+            if continuous_metrics is not None
+            else DEFAULT_CONTINUOUS
         )
         self.categorical_metrics: List[str] = (
-            list(categorical_metrics) if categorical_metrics is not None else DEFAULT_CATEGORICAL
+            list(categorical_metrics)
+            if categorical_metrics is not None
+            else DEFAULT_CATEGORICAL
         )
         self.categorical_columns: List[str] = categorical_columns or []
 
@@ -350,7 +407,9 @@ class EffectSizeEstimator:
             result = ColumnEffectSizeResult(column=col, is_categorical=is_cat)
 
             if is_cat:
-                pmf_a, pmf_b = _aligned_pmfs(real_vals.astype(str), synth_vals.astype(str))
+                pmf_a, pmf_b = _aligned_pmfs(
+                    real_vals.astype(str), synth_vals.astype(str)
+                )
                 for metric in self.categorical_metrics:
                     if metric == "hellinger":
                         val = _hellinger(pmf_a, pmf_b)
@@ -403,8 +462,35 @@ class EffectSizeEstimator:
             vals = agg.get(metric, [])
             if vals:
                 arr = np.array(vals)
-                agg_val = float(np.mean(np.abs(arr))) if metric in _signed else float(np.mean(arr))
+                agg_val = (
+                    float(np.mean(np.abs(arr)))
+                    if metric in _signed
+                    else float(np.mean(arr))
+                )
                 setattr(results, f"mean_{metric}", agg_val)
+
+        # Compute per-column divergence score and rank most/least divergent
+        for r in per_column:
+            if r.is_categorical:
+                if r.hellinger is not None:
+                    r.divergence_score = r.hellinger
+                elif r.js_divergence is not None:
+                    r.divergence_score = r.js_divergence
+            else:
+                if r.overlap_coef is not None:
+                    r.divergence_score = 1.0 - r.overlap_coef
+                elif r.normalized_wasserstein is not None:
+                    w = r.normalized_wasserstein
+                    r.divergence_score = w / (w + 1.0)
+
+        scored = sorted(
+            [r for r in per_column if r.divergence_score is not None],
+            key=lambda r: r.divergence_score,  # type: ignore[arg-type]
+            reverse=True,
+        )
+        _n = 5
+        results.most_divergent = scored[:_n]
+        results.least_divergent = list(reversed(scored[-_n:]))
 
         n_cont = sum(not r.is_categorical for r in per_column)
         n_cat = sum(r.is_categorical for r in per_column)
@@ -416,4 +502,20 @@ class EffectSizeEstimator:
                 if getattr(results, f"mean_{m}", None) is not None
             )
         )
+        if results.most_divergent:
+            logger.info(
+                "Most divergent columns: "
+                + ", ".join(
+                    f"{r.column} ({r.divergence_score:.4f})"
+                    for r in results.most_divergent
+                )
+            )
+        if results.least_divergent:
+            logger.info(
+                "Least divergent columns: "
+                + ", ".join(
+                    f"{r.column} ({r.divergence_score:.4f})"
+                    for r in results.least_divergent
+                )
+            )
         return results

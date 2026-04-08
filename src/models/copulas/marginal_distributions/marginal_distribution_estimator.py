@@ -143,6 +143,23 @@ class MarginalDistributionEstimator:
                 ),
             )
 
+        # --- Guard: empty or constant column → uniform fallback ---
+        finite_data = column_data[np.isfinite(column_data)]
+        if len(finite_data) == 0 or np.ptp(finite_data) == 0:
+            _logger.warning(
+                f"'{col_name}': column is empty or constant "
+                f"(n_finite={len(finite_data)}); assigning uniform fallback."
+            )
+            lo = float(finite_data[0]) if len(finite_data) > 0 else 0.0
+            return EstimatedMarginalDistribution(
+                distribution=stats.uniform,
+                marginal_distribution_info=MarginalDistributionInfo(
+                    distribution_name=stats.uniform.name,
+                    parameters=[lo, 1e-6],
+                    column_name=col_name,
+                ),
+            )
+
         # --- Restrict distribution pool for peptide columns ---
         if "Peptide" in col_name:
             candidate_dists = [stats.lognorm, stats.beta, stats.gamma, stats.expon]

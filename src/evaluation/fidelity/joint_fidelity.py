@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from loguru import logger
 
 from src.evaluation.privacy.preprocessing import FeatureProcessor, Scaler
+from src.evaluation.utils.eval_utils import sparse_peptide_columns
 
 
 @dataclass
@@ -59,9 +60,11 @@ class JointFidelityResults:
 
 def _rbf_kernel(X: np.ndarray, Y: np.ndarray, sigma: float) -> np.ndarray:
     """Gaussian (RBF) kernel matrix K(X, Y)."""
-    # ||x - y||^2 via broadcasting — keep memory under control
-    diff = X[:, None, :] - Y[None, :, :]          # (n, m, d)
-    sq_dist = (diff ** 2).sum(axis=-1)              # (n, m)
+    # ||x - y||^2 = ||x||^2 + ||y||^2 - 2*x@y^T  — avoids 3D intermediate tensor
+    sq_X = np.sum(X ** 2, axis=1, keepdims=True)   # (n, 1)
+    sq_Y = np.sum(Y ** 2, axis=1, keepdims=True)   # (m, 1)
+    sq_dist = sq_X + sq_Y.T - 2.0 * (X @ Y.T)     # (n, m)
+    sq_dist = np.maximum(sq_dist, 0.0)             # numerical guard against small negatives
     return np.exp(-sq_dist / (2 * sigma ** 2))
 
 
@@ -169,6 +172,7 @@ class JointFidelityEstimator:
         categorical_columns: Optional[List[str]] = None,
         k: int = 5,
         max_features: int = 100,
+        peptide_zero_threshold: Optional[float] = None,
     ):
         self.feature_processor = FeatureProcessor(
             scaler=scaler if scaler is not None else RobustScaler(),
@@ -176,6 +180,7 @@ class JointFidelityEstimator:
         )
         self.k = k
         self.max_features = max_features
+        self.peptide_zero_threshold = peptide_zero_threshold
 
     def estimate(
         self,
@@ -183,6 +188,12 @@ class JointFidelityEstimator:
         synth_df: pl.DataFrame,
     ) -> JointFidelityResults:
         logger.info("Computing joint fidelity metrics (MMD, Precision, Recall, Coverage)...")
+
+        if self.peptide_zero_threshold is not None:
+            drop_cols = sparse_peptide_columns(real_df, self.peptide_zero_threshold)
+            if drop_cols:
+                real_df = real_df.drop(drop_cols)
+                synth_df = synth_df.drop(drop_cols)
 
         real_arr = self.feature_processor.fit_transform(real_df)
         synth_arr = self.feature_processor.transform(synth_df)

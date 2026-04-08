@@ -36,6 +36,7 @@ from sklearn.preprocessing import RobustScaler
 
 from src.evaluation.privacy.preprocessing import FeatureProcessor, Scaler
 from src.evaluation.privacy.dcr import DCREstimator, DCRResults
+from src.evaluation.utils.eval_utils import sparse_peptide_columns
 from src.evaluation.privacy.membership_inference import MembershipInferenceAttack, MIAResults
 from src.evaluation.privacy.AuthenticityEstimator import (
     AuthenticityEstimator,
@@ -106,6 +107,10 @@ class PrivacyReport:
         Distance metric for DCR: ``"euclidean"`` or ``"gower"``.
     reid_distance_metric :
         Distance metric for re-identification risk: ``"euclidean"`` or ``"gower"``.
+    peptide_zero_threshold :
+        Peptide columns whose real-data zero fraction exceeds this value are
+        dropped before any privacy metric is computed.  ``None`` disables
+        filtering (default).
     """
 
     def __init__(
@@ -125,6 +130,7 @@ class PrivacyReport:
         reid_risk_threshold: float = 0.5,
         dcr_distance_metric: str = "euclidean",
         reid_distance_metric: str = "euclidean",
+        peptide_zero_threshold: Optional[float] = None,
     ):
         self.categorical_columns = categorical_columns or []
         self._scaler = scaler if scaler is not None else RobustScaler()
@@ -141,6 +147,7 @@ class PrivacyReport:
         self.reid_risk_threshold = reid_risk_threshold
         self.dcr_distance_metric = dcr_distance_metric
         self.reid_distance_metric = reid_distance_metric
+        self.peptide_zero_threshold = peptide_zero_threshold
 
     def run(self, real_df: pl.DataFrame, synth_df: pl.DataFrame) -> PrivacyResults:
         """Run enabled privacy metrics with a shared FeatureProcessor.
@@ -156,6 +163,17 @@ class PrivacyReport:
             Synthetic dataset to evaluate.
         """
         results = PrivacyResults()
+
+        # Drop sparse peptide columns before any distance/encoding step.
+        if self.peptide_zero_threshold is not None:
+            sparse_cols = sparse_peptide_columns(real_df, self.peptide_zero_threshold)
+            if sparse_cols:
+                real_df = real_df.drop(sparse_cols)
+                synth_df = synth_df.drop([c for c in sparse_cols if c in synth_df.columns])
+                logger.info(
+                    f"PrivacyReport: dropped {len(sparse_cols)} sparse peptide columns "
+                    f"(zero fraction > {self.peptide_zero_threshold:.0%}) before privacy estimation."
+                )
 
         # Fit the shared processor on all real data once.
         shared_fp = FeatureProcessor(

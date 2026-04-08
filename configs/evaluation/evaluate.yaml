@@ -1,0 +1,107 @@
+# Configuration for the unified evaluate.py script
+# Run with: python -m src.evaluation.evaluate
+# Override any value on the CLI, e.g.:
+#   python -m src.evaluation.evaluate paths.real_data_path=/data/real.csv
+
+# ---------------------------------------------------------------------------
+# Data paths
+# ---------------------------------------------------------------------------
+paths:
+  real_data_path: /home/fmirkovic/Peptide-synthesis/resources/merged_peptide_and_clinical.csv          # required — path to real CSV
+  synthetic_data_path: /home/fmirkovic/Peptide-synthesis/resources/merged_synth.csv     # required — path to synthetic CSV
+  output_dir: ./evaluation_output
+
+# ---------------------------------------------------------------------------
+# Column selection
+# ---------------------------------------------------------------------------
+# Restrict evaluation to these columns (null = all common columns)
+columns: null
+# Columns to treat as categorical (null = numeric-only inference)
+categorical_columns: 
+ - "Geschlecht (1=female)"
+ - "diabetes"
+ - "Kidney disease"
+ - "hypertension"
+ - "CVD"
+# ID columns to drop before evaluation (e.g. patient/sample identifiers)
+id_columns: 
+  - "idAuswertung"
+
+# ---------------------------------------------------------------------------
+# Preprocessing
+# ---------------------------------------------------------------------------
+drop_nan: true   # if true, drop rows with any null/NaN before evaluation
+
+# ---------------------------------------------------------------------------
+# Per-event evaluation
+# ---------------------------------------------------------------------------
+# Split data by event_type and run a separate fidelity+privacy report for each.
+# Figures are saved to <output_dir>/<event>/, metrics to metrics_<event>.json.
+per_event_evaluation:
+  enabled: true
+  column: event_type         # column used for stratification (excluded from features)
+  event_types:
+    - hf
+    - ckd
+    - no_event
+
+# ---------------------------------------------------------------------------
+# Output settings
+# ---------------------------------------------------------------------------
+save_figures: true
+figures_fmt: png    # png | pdf | svg
+figures_dpi: 150
+save_json: true     # writes metrics.json to output_dir
+
+# ---------------------------------------------------------------------------
+# Fidelity
+# ---------------------------------------------------------------------------
+run_fidelity: true
+fidelity:
+  run_marginal: true
+  run_correlation: true
+  run_joint: true
+  run_classifier: true
+  run_corr_uncertainty: true
+  run_effect_size: true
+  corr_method: spearman           # spearman | pearson
+  max_correlation_cols: 60
+  n_bootstrap: 200                # raise to 1000 for publication-quality CIs
+  max_corr_uncertainty_cols: 30
+  n_classifier_folds: 5
+  classifier_type: logistic_regression  # random_forest | logistic_regression | gradient_boosted
+  # Exclude sparse peptide columns from classifier and joint tests.
+  # Peptides with a zero fraction above this threshold are dropped (null = disabled).
+  peptide_zero_threshold: 0.4
+  # Evaluate which sparse (histogram-imputed) peptides differ most / least from real.
+  run_sparse_peptide: true
+  effect_size_metrics:
+    continuous:
+      - cohen_d
+      - rank_biserial
+      - median_abs_shift
+      - cles
+      - overlap_coef
+      - normalized_wasserstein
+    categorical:
+      - hellinger
+      - js_divergence
+
+# ---------------------------------------------------------------------------
+# Privacy
+# ---------------------------------------------------------------------------
+run_privacy: true
+privacy:
+  run_dcr: true
+  run_authenticity: false
+  run_mia: true
+  run_reidentification: true
+  holdout_fraction: 0.5
+  par_percentile: 5.0
+  authenticity_threshold: 1.0
+  mia_holdout_fraction: 0.2
+  mia_attack_signal: both     # dcr | likelihood | both
+  mia_n_folds: 5
+  reid_risk_threshold: 0.5
+  dcr_distance_metric: gower   # euclidean | gower
+  reid_distance_metric: gower  # euclidean | gower

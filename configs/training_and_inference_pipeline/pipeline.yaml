@@ -10,14 +10,14 @@ run_training: true
 run_inference: true
 run_evaluation: true
 
-event: no_event
+event: all #no_event
 
 experiment_name: restart
 
-run_name: NE
+run_name: all_events
 
-sampled_patients_num: 200
-non_zero_threshold: 20.0
+sampled_patients_num: 300
+non_zero_threshold: 40
 ml_flow_tracking_uri: http://10.100.111.210:5004
 primary_key: ${data_processor.id_column}
 

@@ -273,6 +273,8 @@ class SDVPreprocessor:
                     return category
 
             # Fallback for out-of-range values
+            if not categories:
+                return None
             if u < 0.0:
                 return categories[0]
             return categories[-1]

@@ -80,6 +80,10 @@ from src.evaluation.fidelity.effect_size import (
     DEFAULT_CONTINUOUS,
     DEFAULT_CATEGORICAL,
 )
+from src.evaluation.fidelity.sparse_peptide_fidelity import (
+    SparsePeptideFidelityEstimator,
+    SparsePeptideFidelityResults,
+)
 from src.evaluation.privacy.preprocessing import Scaler
 
 
@@ -91,6 +95,7 @@ class FidelityResults:
     classifier: Optional[TwoSampleClassifierResults] = None
     corr_uncertainty: Optional[CorrelationUncertaintyResults] = None
     effect_size: Optional[EffectSizeResults] = None
+    sparse_peptide: Optional[SparsePeptideFidelityResults] = None
     figures: Dict[str, plt.Figure] = field(default_factory=dict)
 
     def summary(self) -> Dict[str, float]:
@@ -108,6 +113,8 @@ class FidelityResults:
             metrics.update(self.corr_uncertainty.summary())
         if self.effect_size:
             metrics.update(self.effect_size.summary())
+        if self.sparse_peptide:
+            metrics.update(self.sparse_peptide.summary())
         return metrics
 
     def to_json(self) -> str:
@@ -165,21 +172,32 @@ class FidelityReport:
         max_corr_uncertainty_cols: int = 50,
         effect_size_continuous_metrics: Optional[List[str]] = None,
         effect_size_categorical_metrics: Optional[List[str]] = None,
+        peptide_zero_threshold: Optional[float] = None,
+        run_sparse_peptide: bool = True,
     ):
         self.categorical_columns = categorical_columns or []
         _scaler = scaler if scaler is not None else RobustScaler()
 
         self._marginal_est = (
             MarginalFidelityEstimator(categorical_columns=self.categorical_columns)
-            if run_marginal else None
+            if run_marginal
+            else None
         )
         self._corr_est = (
-            CorrelationFidelityEstimator(method=corr_method, max_columns=max_correlation_cols)
-            if run_correlation else None
+            CorrelationFidelityEstimator(
+                method=corr_method, max_columns=max_correlation_cols
+            )
+            if run_correlation
+            else None
         )
         self._joint_est = (
-            JointFidelityEstimator(scaler=_scaler, categorical_columns=self.categorical_columns)
-            if run_joint else None
+            JointFidelityEstimator(
+                scaler=_scaler,
+                categorical_columns=self.categorical_columns,
+                peptide_zero_threshold=peptide_zero_threshold,
+            )
+            if run_joint
+            else None
         )
         self._clf_test = (
             TwoSampleClassifierTest(
@@ -187,8 +205,10 @@ class FidelityReport:
                 categorical_columns=self.categorical_columns,
                 classifier=classifier_type,
                 n_folds=n_classifier_folds,
+                peptide_zero_threshold=peptide_zero_threshold,
             )
-            if run_classifier else None
+            if run_classifier
+            else None
         )
         self._corr_unc_est = (
             CorrelationUncertaintyEstimator(
@@ -196,7 +216,8 @@ class FidelityReport:
                 n_bootstrap=n_bootstrap,
                 max_columns=max_corr_uncertainty_cols,
             )
-            if run_corr_uncertainty else None
+            if run_corr_uncertainty
+            else None
         )
         self._effect_size_est = (
             EffectSizeEstimator(
@@ -204,7 +225,19 @@ class FidelityReport:
                 categorical_metrics=effect_size_categorical_metrics,
                 categorical_columns=self.categorical_columns,
             )
-            if run_effect_size else None
+            if run_effect_size
+            else None
+        )
+        self._sparse_peptide_est = (
+            SparsePeptideFidelityEstimator(
+                zero_fraction_threshold=(
+                    peptide_zero_threshold
+                    if peptide_zero_threshold is not None
+                    else 0.4
+                ),
+            )
+            if run_sparse_peptide
+            else None
         )
 
     # ------------------------------------------------------------------
@@ -216,6 +249,8 @@ class FidelityReport:
         real_df: pl.DataFrame,
         synth_df: pl.DataFrame,
         columns: Optional[List[str]] = None,
+        real_df_full: Optional[pl.DataFrame] = None,
+        synth_df_full: Optional[pl.DataFrame] = None,
     ) -> FidelityResults:
         """Run all enabled fidelity modules and return a FidelityResults object.
 
@@ -235,17 +270,33 @@ class FidelityReport:
         tasks: Dict[str, callable] = {}
 
         if self._marginal_est:
-            tasks["marginal"] = lambda: self._marginal_est.estimate(real_df, synth_df, columns)
+            tasks["marginal"] = lambda: self._marginal_est.estimate(
+                real_df, synth_df, columns
+            )
         if self._corr_est:
-            tasks["correlation"] = lambda: self._corr_est.estimate(real_df, synth_df, columns)
+            tasks["correlation"] = lambda: self._corr_est.estimate(
+                real_df, synth_df, columns
+            )
         if self._joint_est:
             tasks["joint"] = lambda: self._joint_est.estimate(real_df, synth_df)
         if self._clf_test:
             tasks["classifier"] = lambda: self._clf_test.estimate(real_df, synth_df)
         if self._corr_unc_est:
-            tasks["corr_uncertainty"] = lambda: self._corr_unc_est.estimate(real_df, synth_df, columns)
+            tasks["corr_uncertainty"] = lambda: self._corr_unc_est.estimate(
+                real_df, synth_df, columns
+            )
         if self._effect_size_est:
-            tasks["effect_size"] = lambda: self._effect_size_est.estimate(real_df, synth_df, columns)
+            tasks["effect_size"] = lambda: self._effect_size_est.estimate(
+                real_df, synth_df, columns
+            )
+        if self._sparse_peptide_est:
+            # Use the full frames (with sparse cols intact) when provided;
+            # fall back to the passed frames if not (e.g. direct API callers).
+            _sp_real = real_df_full if real_df_full is not None else real_df
+            _sp_synth = synth_df_full if synth_df_full is not None else synth_df
+            tasks["sparse_peptide"] = lambda: self._sparse_peptide_est.estimate(
+                _sp_real, _sp_synth
+            )
 
         with ThreadPoolExecutor(max_workers=min(len(tasks), 6)) as executor:
             future_map = {executor.submit(fn): name for name, fn in tasks.items()}
@@ -253,13 +304,17 @@ class FidelityReport:
                 name = future_map[future]
                 try:
                     result = future.result()
-                    setattr(results, name if name != "corr_uncertainty" else "corr_uncertainty", result)
+                    setattr(results, name, result)
                     logger.info(f"FidelityReport: '{name}' completed.")
                 except Exception as exc:
                     logger.error(f"FidelityReport: '{name}' failed — {exc}")
 
         # Generate figures from completed results
-        results.figures = self._generate_figures(results, real_df, synth_df)
+        _sp_real = real_df_full if real_df_full is not None else real_df
+        _sp_synth = synth_df_full if synth_df_full is not None else synth_df
+        results.figures = self._generate_figures(
+            results, real_df, synth_df, _sp_real, _sp_synth
+        )
 
         # Log a compact summary
         summary = results.summary()
@@ -279,26 +334,34 @@ class FidelityReport:
         results: FidelityResults,
         real_df: pl.DataFrame,
         synth_df: pl.DataFrame,
+        real_df_full: Optional[pl.DataFrame] = None,
+        synth_df_full: Optional[pl.DataFrame] = None,
     ) -> Dict[str, plt.Figure]:
         figures: Dict[str, plt.Figure] = {}
 
         if results.marginal and self._marginal_est:
             try:
-                figures["marginal_top_divergent"] = self._marginal_est.plot_top_divergent(
-                    results.marginal, real_df, synth_df
+                figures["marginal_top_divergent"] = (
+                    self._marginal_est.plot_top_divergent(
+                        results.marginal, real_df, synth_df
+                    )
                 )
             except Exception as e:
                 logger.warning(f"Could not generate marginal plot: {e}")
 
         if results.correlation and self._corr_est:
             try:
-                figures["correlation_heatmaps"] = self._corr_est.plot(results.correlation)
+                figures["correlation_heatmaps"] = self._corr_est.plot(
+                    results.correlation
+                )
             except Exception as e:
                 logger.warning(f"Could not generate correlation heatmap: {e}")
 
         if results.classifier and self._clf_test:
             try:
-                figures["two_sample_classifier"] = self._clf_test.plot(results.classifier)
+                figures["two_sample_classifier"] = self._clf_test.plot(
+                    results.classifier
+                )
             except Exception as e:
                 logger.warning(f"Could not generate classifier plot: {e}")
 
@@ -309,5 +372,15 @@ class FidelityReport:
                 )
             except Exception as e:
                 logger.warning(f"Could not generate correlation uncertainty plot: {e}")
+
+        if results.sparse_peptide and self._sparse_peptide_est:
+            try:
+                _sp_real = real_df_full if real_df_full is not None else real_df
+                _sp_synth = synth_df_full if synth_df_full is not None else synth_df
+                figures["sparse_peptide_fidelity"] = self._sparse_peptide_est.plot(
+                    results.sparse_peptide, _sp_real, _sp_synth
+                )
+            except Exception as e:
+                logger.warning(f"Could not generate sparse-peptide fidelity plot: {e}")
 
         return figures

@@ -60,6 +60,30 @@ def get_peptide_columns(df: pl.DataFrame) -> list[str]:
     return peptide_columns
 
 
+def sparse_peptide_columns(
+    df: pl.DataFrame, zero_fraction_threshold: float
+) -> list[str]:
+    """Return peptide columns whose zero-value fraction in *df* exceeds the threshold.
+
+    Parameters
+    ----------
+    df : pl.DataFrame
+        Reference DataFrame (typically the real data).
+    zero_fraction_threshold : float
+        Columns with a zero fraction strictly above this value are returned.
+        E.g. 0.9 means columns where > 90 % of values are zero.
+    """
+    peptide_cols = get_peptide_columns(df)
+    n = len(df)
+    sparse = [col for col in peptide_cols if (df[col] == 0).sum() / n > zero_fraction_threshold]
+    if sparse:
+        logger.info(
+            f"Excluding {len(sparse)} sparse peptide columns "
+            f"(zero fraction > {zero_fraction_threshold})"
+        )
+    return sparse
+
+
 def filer_peptide_by_zero_pecentage(
     df: pl.DataFrame, non_zero_threshold: int | float = 30.0
 ):
