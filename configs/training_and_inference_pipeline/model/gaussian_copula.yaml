@@ -1,9 +1,6 @@
 _target_: src.models.copulas.gaussian_copula.gaussian_copula_basic.GaussianCopulaBasic
 
-<<<<<<< HEAD
-=======
 # ── Marginal distribution fitting ────────────────────────────────────────────
->>>>>>> troubleshooting
 marginal_distribution_estimator:
   _target_: src.models.copulas.marginal_distributions.marginal_distribution_estimator.MarginalDistributionEstimator
   continuous_distributions:
@@ -15,13 +12,6 @@ marginal_distribution_estimator:
     - stats.t
     - stats.uniform
     - stats.expon
-<<<<<<< HEAD
-  univariate_distribution_metric:
-    _target_: src.models.copulas.marginal_distributions.marginal_distribution_metrics.KullbackLeiblerDivergence
-
-sdv_preprocessor:
-  _target_: src.models.copulas.gaussian_copula.preprocessing.SDVPreprocessor
-=======
   # Metric used to select the best-fitting distribution per column.
   # Options (all defined in marginal_distribution_metrics.py):
   #   KullbackLeiblerDivergence  — original default; can overfit to shape
@@ -60,24 +50,11 @@ sdv_preprocessor:
   #                           Values live in R; marginal is forced to N(0,1) so
   #                           the copula round-trip is consistent.
   categorical_encoding: truncated_gaussian
->>>>>>> troubleshooting
 
 ml_flow_info:
   experiment_name: ${experiment_name}
   run_name: ${run_name}
 
-<<<<<<< HEAD
-categorical_columns: 
-    - "Geschlecht (1=female)"
-    - "Kidney disease"
-    - "diabetes"
-    - "CVD"
-    - "hypertension"
-    - "event_type"
-
-
-copula_type: gaussian
-=======
 # ── Categorical columns ───────────────────────────────────────────────────────
 categorical_columns:
   - "Geschlecht (1=female)"
@@ -120,4 +97,3 @@ peptide_non_negative: true
 #     "^Age$": [0, 120]
 #     "BMI":   [10, 70]
 clip_columns: {}
->>>>>>> troubleshooting

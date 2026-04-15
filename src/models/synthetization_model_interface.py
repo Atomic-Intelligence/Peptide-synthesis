@@ -202,12 +202,6 @@ class SynthetizationModelInterface(abc.ABC):
 
         if not self.fitted:
             if not run.empty:
-<<<<<<< HEAD
-                # if the run already exists, raise an error, as we care about ensuring run names are unique
-                raise RuntimeError(
-                    f"Model {ml_flow_info.experiment_name}/{ml_flow_info.run_name} already exists!"
-                )
-=======
                 # auto-version the run name if it already exists: name -> name_v1 -> name_v2 -> ...
                 base_name = ml_flow_info.run_name
                 version = 1
@@ -219,7 +213,6 @@ class SynthetizationModelInterface(abc.ABC):
                     )
                     version += 1
                 ml_flow_info.run_name = versioned_name
->>>>>>> troubleshooting
             return experiment_id, None
 
         else:

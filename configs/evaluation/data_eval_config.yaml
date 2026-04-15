@@ -8,8 +8,6 @@ event_types:
     display_name: "Chronic Kidney Disease"
     time_to_event_column: "time-to-CKDevent(to event or last visit)"
 
-<<<<<<< HEAD
-=======
 # Fidelity report settings (all modules run in parallel alongside existing tasks)
 fidelity:
   enabled: true
@@ -38,7 +36,6 @@ privacy:
   reid_risk_threshold: 0.5
   reid_distance_metric: euclidean   # euclidean | gower
 
->>>>>>> troubleshooting
 defaults:
   - _self_
   - svm_peptide_ids: ids.yaml

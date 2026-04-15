@@ -3,15 +3,12 @@ defaults:
   - data_processor: processor
   - model: gaussian_copula
   - inference: inference_runner
-<<<<<<< HEAD
-=======
   - imputation: histogram_imputation
->>>>>>> troubleshooting
   - _self_
 
 run_training: true
 run_inference: true
-<<<<<<< HEAD
+run_evaluation: false
 
 event: no_event
 
@@ -22,18 +19,5 @@ run_name: NE
 sampled_patients_num: 100
 non_zero_threshold: 40.0
 ml_flow_tracking_uri: http://10.100.111.210:5002
-=======
-run_evaluation: true
-
-event: all #no_event
-
-experiment_name: restart
-
-run_name: all_events
-
-sampled_patients_num: 2000
-non_zero_threshold: 30
-ml_flow_tracking_uri: http://10.100.111.210:5004
->>>>>>> troubleshooting
 primary_key: ${data_processor.id_column}
 

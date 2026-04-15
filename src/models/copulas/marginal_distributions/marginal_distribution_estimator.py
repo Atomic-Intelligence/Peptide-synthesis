@@ -1,18 +1,12 @@
 import os
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
-<<<<<<< HEAD
-=======
 from typing import Optional
->>>>>>> troubleshooting
 
 import numpy as np
 import polars as pl
 from scipy import stats
-<<<<<<< HEAD
-=======
 from scipy.stats import kstest
->>>>>>> troubleshooting
 
 from src.logger import setup_logger
 from src.models.copulas.gaussian_copula.data_models import (
@@ -23,13 +17,6 @@ from src.models.copulas.marginal_distributions.marginal_distribution_metrics imp
     UnivariateDistributionMetric,
     UnivariateDistribution,
 )
-<<<<<<< HEAD
-
-logger = setup_logger()
-
-
-def get_distribution_class(distribution_name: str) -> UnivariateDistribution:
-=======
 from src.models.copulas.marginal_distributions.custom_distributions import (
     ZeroInflatedGamma,
     ZeroInflatedLognormal,
@@ -48,7 +35,6 @@ def get_distribution_class(distribution_name: str) -> UnivariateDistribution:
     # Check custom registry first
     if distribution_name in CUSTOM_DISTRIBUTION_REGISTRY:
         return CUSTOM_DISTRIBUTION_REGISTRY[distribution_name]
->>>>>>> troubleshooting
     match distribution_name:
         case "stats.beta":
             return stats.beta
@@ -75,23 +61,6 @@ class MarginalDistributionEstimator:
         self,
         continuous_distributions: list[UnivariateDistribution | str],
         univariate_distribution_metric: UnivariateDistributionMetric,
-<<<<<<< HEAD
-    ):
-        self.continuous_distributions = [
-            (
-                get_distribution_class(distribution_name)
-                if isinstance(distribution_name, str)
-                else distribution_name
-            )
-            for distribution_name in continuous_distributions
-        ]
-        self.univariate_distribution_metric = univariate_distribution_metric
-
-        logger.info(
-            f"Initialized MarginalDistributionEstimator with "
-            f"{len(continuous_distributions)} distributions and "
-            f"metric '{type(univariate_distribution_metric).__name__}'."
-=======
         categorical_columns: Optional[list[str]] = None,
         categorical_encoding: str = "truncated_gaussian",
         use_zero_inflated: bool = True,
@@ -134,7 +103,6 @@ class MarginalDistributionEstimator:
             f"categorical_encoding={categorical_encoding!r}, "
             f"use_zero_inflated={use_zero_inflated}, "
             f"kde_fallback={kde_fallback}."
->>>>>>> troubleshooting
         )
 
     @staticmethod
@@ -143,52 +111,6 @@ class MarginalDistributionEstimator:
         column_data: np.ndarray,
         distributions: list[UnivariateDistribution],
         metric: UnivariateDistributionMetric,
-<<<<<<< HEAD
-    ) -> EstimatedMarginalDistribution:
-        _logger = setup_logger()
-
-        distribution_parameters: dict[UnivariateDistribution, tuple[float, ...]] = {}
-        distribution_metrics: dict[UnivariateDistribution, float] = {}
-        
-        if 'missing' in col_name:
-            distributions = [stats.uniform]
-            
-        elif 'Peptide' in col_name:
-            distributions = [stats.lognorm, stats.beta, stats.gamma, stats.expon]
-
-        for distribution in distributions:
-            method = "MLE"
-
-            try:
-                if 'Peptide' in col_name:
-                    parameters = distribution.fit(data=column_data, method=method, floc=0)
-                else:
-                    parameters = distribution.fit(data=column_data, method=method)
-           
-            except Exception as e:
-                _logger.error(
-                    f"Failed to fit distribution '{distribution.name}' with method '{method}': /n{e}"
-                )
-                continue
-
-            metric_value = metric.evaluate(distribution, parameters, column_data)
-
-            distribution_parameters[distribution] = parameters
-            distribution_metrics[distribution] = metric_value
-
-        if len(distribution_parameters) == 0:
-            raise ValueError(
-                f"No valid distribution could be fitted for column '{col_name}'."
-            )
-
-        best_distribution = max(distribution_metrics, key=distribution_metrics.get)
-
-        _logger.debug(
-            f"Best distribution for column '{col_name}': {best_distribution.name} with params {distribution_parameters[best_distribution]}"
-        )
-
-        if 'missing' in col_name:
-=======
         categorical_columns: set,
         categorical_encoding: str,
         use_zero_inflated: bool,
@@ -199,7 +121,6 @@ class MarginalDistributionEstimator:
 
         # --- Missing indicator columns: always uniform on [0, 1] ---
         if "missing" in col_name:
->>>>>>> troubleshooting
             return EstimatedMarginalDistribution(
                 distribution=stats.uniform,
                 marginal_distribution_info=MarginalDistributionInfo(
@@ -209,17 +130,13 @@ class MarginalDistributionEstimator:
                 ),
             )
 
-<<<<<<< HEAD
-        return EstimatedMarginalDistribution(
-            distribution=best_distribution,
-            marginal_distribution_info=MarginalDistributionInfo(
-                distribution_name=best_distribution.name,
-                parameters=list(distribution_parameters[best_distribution]),
-=======
         # --- Normal-scores-encoded categorical columns: use standard normal ---
         # The copula generates Z ~ N(0,1), so marginal = N(0,1) gives an identity
         # round-trip, and reverse preprocessing maps Z back to categories via Φ(z).
-        if col_name in categorical_columns and categorical_encoding == _ENCODING_NORMAL_SCORES:
+        if (
+            col_name in categorical_columns
+            and categorical_encoding == _ENCODING_NORMAL_SCORES
+        ):
             return EstimatedMarginalDistribution(
                 distribution=stats.norm,
                 marginal_distribution_info=MarginalDistributionInfo(
@@ -332,7 +249,6 @@ class MarginalDistributionEstimator:
             marginal_distribution_info=MarginalDistributionInfo(
                 distribution_name=dist_name,
                 parameters=list(best_params),
->>>>>>> troubleshooting
                 column_name=col_name,
             ),
         )
@@ -341,23 +257,6 @@ class MarginalDistributionEstimator:
         self,
         preprocessed_dataset: pl.DataFrame,
         num_workers: int = 24,
-<<<<<<< HEAD
-    ) -> list[EstimatedMarginalDistribution]:
-        column_names = preprocessed_dataset.columns
-
-        col_data_list = []
-
-        for col_name in column_names:
-            column_data = preprocessed_dataset.get_column(col_name).to_numpy()
-            col_data_list.append(column_data)
-
-        num_tasks = len(column_names)
-
-        max_workers = min(os.cpu_count() // 2, num_workers)
-
-        logger.info(
-            f"Starting marginal distribution fitting for {num_tasks} columns using {max_workers} worker processes."
-=======
         categorical_columns: Optional[list[str]] = None,
     ) -> list[EstimatedMarginalDistribution]:
         """Fit per-column marginal distributions in parallel.
@@ -380,38 +279,12 @@ class MarginalDistributionEstimator:
         logger.info(
             f"Fitting marginals for {len(column_names)} columns "
             f"using {max_workers} worker processes."
->>>>>>> troubleshooting
         )
 
         worker_func = partial(
             self._process_single_column,
             distributions=self.continuous_distributions,
             metric=self.univariate_distribution_metric,
-<<<<<<< HEAD
-        )
-
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            results_iterator = executor.map(worker_func, column_names, col_data_list)
-            results = list(results_iterator)
-
-        logger.success(
-            "Parallel processing for marginals finished. Aggregating results and logging worker messages."
-        )
-
-        logger.success(
-            f"Successfully fitted marginal distributions for {len(results)} columns."
-        )
-
-        result_distributions = [
-            result.marginal_distribution_info.distribution_name for result in results
-        ]
-        distribution_counts = {
-            distribution: result_distributions.count(distribution)
-            for distribution in result_distributions
-        }
-
-        logger.info(f"Distribution counts: {distribution_counts}")
-=======
             categorical_columns=effective_cat_cols,
             categorical_encoding=self.categorical_encoding,
             use_zero_inflated=self.use_zero_inflated,
@@ -428,6 +301,5 @@ class MarginalDistributionEstimator:
             distribution_counts[name] = distribution_counts.get(name, 0) + 1
         logger.info(f"Distribution counts: {distribution_counts}")
         logger.success(f"Fitted marginals for {len(results)} columns.")
->>>>>>> troubleshooting
 
         return results

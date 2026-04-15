@@ -12,11 +12,7 @@ from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig
 
-<<<<<<< HEAD
-from src.mlflow import start_or_connect_mlflow_server
-=======
 from src.mlflow_utils import start_or_connect_mlflow_server
->>>>>>> troubleshooting
 
 # Import all your existing modules
 from src.data.PeptideDataset import (
@@ -41,12 +37,11 @@ from src.evaluation.classifiers.machine_learning_efficiency import (
     train_on_real_estimate_on_synthetic,
     train_on_synthetic_test_on_real,
 )
-<<<<<<< HEAD
-=======
 from src.evaluation.fidelity.fidelity_report import FidelityReport
 from src.evaluation.privacy.privacy_report import PrivacyReport
-from src.evaluation.analysis.correlation_uncertainty import CorrelationUncertaintyEstimator
->>>>>>> troubleshooting
+from src.evaluation.analysis.correlation_uncertainty import (
+    CorrelationUncertaintyEstimator,
+)
 
 logging.basicConfig(level=logging.INFO)
 import warnings
@@ -202,8 +197,6 @@ def execute_tasks(executor, tasks):
     return results
 
 
-<<<<<<< HEAD
-=======
 def _run_fidelity_report(
     run_id: str,
     real_dataset: pl.DataFrame,
@@ -222,8 +215,12 @@ def _run_fidelity_report(
     max_corr_uncertainty_cols = getattr(fidelity_cfg, "max_corr_uncertainty_cols", 30)
     run_effect_size = getattr(fidelity_cfg, "run_effect_size", True)
     _effect_size_cfg = getattr(fidelity_cfg, "effect_size_metrics", None)
-    effect_size_continuous = getattr(_effect_size_cfg, "continuous", None) if _effect_size_cfg else None
-    effect_size_categorical = getattr(_effect_size_cfg, "categorical", None) if _effect_size_cfg else None
+    effect_size_continuous = (
+        getattr(_effect_size_cfg, "continuous", None) if _effect_size_cfg else None
+    )
+    effect_size_categorical = (
+        getattr(_effect_size_cfg, "categorical", None) if _effect_size_cfg else None
+    )
 
     report = FidelityReport(
         categorical_columns=CATEGORICAL_CLINICAL_COLUMNS,
@@ -297,7 +294,6 @@ def _run_privacy_report(
     logger.success("Privacy report logged to MLflow.")
 
 
->>>>>>> troubleshooting
 def run_evaluation_pipeline(
     cfg: DictConfig, real_dataset, synthetic_dataset, classifier_models, executor
 ):
@@ -385,8 +381,6 @@ def run_evaluation_pipeline(
         real_dataset=real_dataset,
     )
 
-<<<<<<< HEAD
-=======
     fidelity_cfg = getattr(cfg, "fidelity", None)
     if fidelity_cfg is None or getattr(fidelity_cfg, "enabled", True):
         tasks["fidelity_report"] = partial(
@@ -407,7 +401,6 @@ def run_evaluation_pipeline(
             privacy_cfg=privacy_cfg if privacy_cfg is not None else object(),
         )
 
->>>>>>> troubleshooting
     # Execute all independent tasks using the shared executor
     reports = execute_tasks(executor, tasks)
 

@@ -4,12 +4,6 @@ description: "Comparing Data Authenticity for Copula Generated Data for all case
 
 zero_percentage: 0.4
 
-<<<<<<< HEAD
-defaults:
-  - authenticity_estimator: knn_authenticity 
-  - paths: paths
-  - mlflow: mlflow  
-=======
 # Distance to Closest Record
 run_dcr: true
 dcr:
@@ -29,5 +23,4 @@ defaults:
   - authenticity_estimator: knn_authenticity
   - paths: paths
   - mlflow: mlflow
->>>>>>> troubleshooting
   - _self_

@@ -1,6 +1,2 @@
 experiment_name: "Synthetic-Data-Evaluation-Test"
-<<<<<<< HEAD
-tracking_uri: http://10.100.111.210:44555
-=======
 tracking_uri: http://10.100.111.210:5004
->>>>>>> troubleshooting

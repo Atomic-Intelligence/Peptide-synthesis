@@ -1,8 +1,5 @@
 import hydra
-<<<<<<< HEAD
-=======
 import mlflow
->>>>>>> troubleshooting
 import polars as pl
 from hydra.utils import instantiate
 from omegaconf import DictConfig
@@ -10,11 +7,7 @@ from omegaconf import DictConfig
 from src.data.utils import DataProcessor
 from src.inference.inference_runner import InferenceRunner
 from src.logger import setup_logger
-<<<<<<< HEAD
-from src.mlflow import start_or_connect_mlflow_server
-=======
 from src.mlflow_utils import start_or_connect_mlflow_server
->>>>>>> troubleshooting
 from src.models.Imputation.HistogramImputation import HistogramImputation
 from src.models.synthetization_model_interface import (
     SynthetizationModelInterface,
@@ -37,11 +30,7 @@ def initialize_model(
 
 def train_model(
     cfg: DictConfig, model: SynthetizationModelInterface, sampled_patients_num: int = 0
-<<<<<<< HEAD
-) -> tuple[SynthetizationModelInterface, HistogramImputation]:
-=======
 ) -> tuple[SynthetizationModelInterface, HistogramImputation, pl.DataFrame]:
->>>>>>> troubleshooting
     logger.info("Running training...")
 
     logger.info("Loading real dataset...")
@@ -62,20 +51,12 @@ def train_model(
         .split_event_control(event=cfg.event)
         .get_processed_data()
     )[0]
-<<<<<<< HEAD
-
-    imputation_data = data_processor.get_data_for_imputation()[0]
-    logger.info(f"Imputation data shape: {imputation_data.shape}")
-
-    histogram_imputation_model = HistogramImputation(column_names=imputation_data.columns, num_bins=100)
-=======
     imputation_data = data_processor.get_data_for_imputation()[0]
     logger.info(f"Imputation data shape: {imputation_data.shape}")
 
     histogram_imputation_model = instantiate(
         cfg.imputation, column_names=imputation_data.columns
     )
->>>>>>> troubleshooting
 
     patient_ids = (
         real_dataset[cfg.primary_key].unique().to_list()
@@ -100,11 +81,7 @@ def train_model(
     histogram_imputation_model.fit(imputation_data)
     logger.success("Training completed!")
 
-<<<<<<< HEAD
-    return model, histogram_imputation_model
-=======
     return model, histogram_imputation_model, real_dataset
->>>>>>> troubleshooting
 
 
 def run_inference(
@@ -121,11 +98,6 @@ def run_inference(
     synthetic_data = inference_runner.run(cfg.inference.n_synthetic_patients)
     logger.success(f"Inference completed. Synthetic data shape: {synthetic_data.shape}")
 
-<<<<<<< HEAD
-    imputed_column_names, imputed_synthetic_data = histogram_imputation_model.generate(cfg.inference.n_synthetic_patients)
-    if imputed_synthetic_data is not None:
-        logger.success(f"Histogram imputation completed. Data shape: {imputed_synthetic_data.shape}")
-=======
     imputed_column_names, imputed_synthetic_data = histogram_imputation_model.generate(
         cfg.inference.n_synthetic_patients
     )
@@ -133,15 +105,12 @@ def run_inference(
         logger.success(
             f"Histogram imputation completed. Data shape: {imputed_synthetic_data.shape}"
         )
->>>>>>> troubleshooting
         df_imputed = pl.DataFrame(imputed_synthetic_data, schema=imputed_column_names)
         synthetic_data = pl.concat([synthetic_data, df_imputed], how="horizontal")
 
     return synthetic_data
 
 
-<<<<<<< HEAD
-=======
 def _load_real_data_for_eval(cfg: DictConfig) -> pl.DataFrame:
     """Re-derive the processed real dataset for evaluation when training was skipped."""
     data_processor_partial = instantiate(cfg.data_processor, _partial_=True)
@@ -245,7 +214,6 @@ def run_evaluation(
             logger.error(f"Failed to log evaluation metrics to MLflow: {exc}")
 
 
->>>>>>> troubleshooting
 @hydra.main(
     version_base="1.1",
     config_path="../configs/training_and_inference_pipeline",
@@ -256,16 +224,6 @@ def main(cfg: DictConfig):
 
     model = initialize_model(cfg)
 
-<<<<<<< HEAD
-    histogram_imputation_model = None
-
-    if cfg.run_training:
-        model, histogram_imputation_model = train_model(cfg=cfg, model=model, sampled_patients_num=cfg.sampled_patients_num)
-
-    if cfg.run_inference:
-        synthetic_data = run_inference(
-            cfg=cfg, ml_flow_info=model.ml_flow_info, model=model, histogram_imputation_model=histogram_imputation_model
-=======
     real_df = None
     histogram_imputation_model = None
     if cfg.run_training:
@@ -280,14 +238,11 @@ def main(cfg: DictConfig):
             ml_flow_info=model.ml_flow_info,
             model=model,
             histogram_imputation_model=histogram_imputation_model,
->>>>>>> troubleshooting
         )
         synthetic_data.write_csv(
             f"synthetic_{cfg.event}_sampled_{cfg.sampled_patients_num}.csv"
         )
 
-<<<<<<< HEAD
-=======
     if cfg.run_evaluation:
         if real_df is None:
             real_df = _load_real_data_for_eval(cfg)
@@ -300,7 +255,6 @@ def main(cfg: DictConfig):
             cfg=cfg, real_df=real_df, synthetic_df=synthetic_data, model=model
         )
 
->>>>>>> troubleshooting
     input("Press Enter to shut down the experiment viewing app...")
     shutdown_hook()
     logger.info("Shutting down the experiment viewing app...")

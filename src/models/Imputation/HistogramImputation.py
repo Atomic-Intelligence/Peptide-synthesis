@@ -1,45 +1,4 @@
 import numpy as np
-<<<<<<< HEAD
-from numpy.random import choice
-import polars as pl
-from tqdm import tqdm
-from loguru import logger
-
-
-class HistogramImputation:
-    def __init__(self, column_names: list[str], num_bins: int):
-        self.column_names = column_names
-        self.num_bins = num_bins
-
-    def fit(self, data: pl.DataFrame):
-        self.col_densities = {col: [] for col in self.column_names}
-        self.medians = {col: [] for col in self.column_names}
-
-        for col in tqdm(self.column_names, desc="Calculating histogram imputation..."):
-            col_values = data.select(col).to_numpy()
-            hist, bin_edges = np.histogram(col_values, bins=self.num_bins)
-            for i in range(len(bin_edges) - 1):
-                up, low = bin_edges[i + 1], bin_edges[i]
-                bin_idx = np.logical_and(col_values >= low, col_values <= up)
-                if bin_idx.any():
-                    self.medians[col].append(np.median(col_values[bin_idx]))
-                else:
-                    self.medians[col].append((up + low) / 2)
-
-            self.col_densities[col] = hist / np.sum(hist)
-        logger.success("Imputation done!")
-
-    def generate(self, n: int) -> tuple[list[str], np.ndarray]:
-        if len(self.column_names) == 0:
-            return self.column_names, None
-
-        generated_data = [
-            choice(self.medians[col], p=self.col_densities[col], size=n)[:, None]
-            for col in self.column_names
-        ]
-        generated_data = np.concatenate(generated_data, axis=-1)
-        return self.column_names, generated_data
-=======
 import polars as pl
 from joblib import Parallel, delayed
 from tqdm import tqdm
@@ -51,6 +10,7 @@ _SAMPLING_STRATEGIES = ("uniform", "median")
 # ---------------------------------------------------------------------------
 # Module-level worker — must be at module scope for joblib to pickle it.
 # ---------------------------------------------------------------------------
+
 
 def _fit_column(
     col_values: np.ndarray,
@@ -74,7 +34,9 @@ def _fit_column(
         for i in range(num_bins):
             mask = bin_indices == i
             medians[i] = (
-                np.median(col_values[mask]) if mask.any() else (edges[i] + edges[i + 1]) / 2
+                np.median(col_values[mask])
+                if mask.any()
+                else (edges[i] + edges[i + 1]) / 2
             )
 
     return densities, edges, medians
@@ -126,7 +88,9 @@ class HistogramImputation:
             for col in tqdm(self.column_names, desc="Extracting columns")
         ]
 
-        logger.info(f"Fitting histograms for {len(col_arrays)} columns (n_jobs={self.n_jobs})...")
+        logger.info(
+            f"Fitting histograms for {len(col_arrays)} columns (n_jobs={self.n_jobs})..."
+        )
         results = Parallel(n_jobs=self.n_jobs, prefer="threads")(
             delayed(_fit_column)(arr, self.num_bins, self.sampling_strategy)
             for _, arr in col_arrays
@@ -176,24 +140,23 @@ class HistogramImputation:
         # Vectorised inverse-CDF bin sampling.
         # searchsorted processes n values per column in C — far faster than
         # d separate np.random.choice calls.
-        cumsum = np.cumsum(all_densities, axis=1)           # (d, num_bins)
-        u = np.random.random((d, n))                        # (d, n)
+        cumsum = np.cumsum(all_densities, axis=1)  # (d, num_bins)
+        u = np.random.random((d, n))  # (d, n)
         chosen = np.array(
             [np.searchsorted(cumsum[i], u[i]) for i in range(d)]
-        )                                                   # (d, n)
+        )  # (d, n)
         chosen = np.clip(chosen, 0, self.num_bins - 1)
 
-        row_idx = np.arange(d)[:, None]                    # (d, 1)  broadcast helper
+        row_idx = np.arange(d)[:, None]  # (d, 1)  broadcast helper
 
         if self.sampling_strategy == "uniform":
-            low  = all_edges[row_idx, chosen]              # (d, n)
-            high = all_edges[row_idx, chosen + 1]          # (d, n)
-            result = np.random.uniform(low, high)          # (d, n)
+            low = all_edges[row_idx, chosen]  # (d, n)
+            high = all_edges[row_idx, chosen + 1]  # (d, n)
+            result = np.random.uniform(low, high)  # (d, n)
         else:  # median
             all_medians = np.stack(
                 [self.medians[col] for col in self.column_names]
             )  # (d, num_bins)
-            result = all_medians[row_idx, chosen]          # (d, n)
+            result = all_medians[row_idx, chosen]  # (d, n)
 
-        return self.column_names, result.T                 # (n, d)
->>>>>>> troubleshooting
+        return self.column_names, result.T  # (n, d)

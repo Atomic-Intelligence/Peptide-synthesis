@@ -1,33 +1,3 @@
-<<<<<<< HEAD
-
-save_name: "arf_generated.csv"
-
-description: "ARF for NO events with QuantileTransformer and Histogram imputation with 100 bins. Zero threshold for peptides is **0.6**"
-
-event_type: "no_event"
-
-arf_params:
-  min_node_size: 5
-  num_trees: 35 #20 
-  max_features: 2
-
-imputation_params:
-  num_bins: 100
-
-zero_percentage_threshold: 0.4
-
-
-scaler:
-  _target_: sklearn.preprocessing.QuantileTransformer
-
-
-defaults:
-  - _self_
-  - paths: paths.yaml
-  - mlflow: mlflow.yaml
-  - hydra: hydra.yaml
-
-=======
 _target_: src.models.AdversarialRandomForests.ARFPipeline.ARFPipeline
 
 # MLflow run identity — resolved from the top-level pipeline config.
@@ -50,4 +20,3 @@ arf_params:
 #          sklearn.preprocessing.PowerTransformer
 scaler:
   _target_: sklearn.preprocessing.RobustScaler
->>>>>>> troubleshooting

@@ -54,14 +54,11 @@ class GaussianCopulaBasic(SynthetizationModelInterface):
         sdv_preprocessor: SDVPreprocessor,
         ml_flow_info: MlFlowTrainingRunInfo,
         copula_type: str = "gaussian",
-<<<<<<< HEAD
-=======
         corr_method: str = "pearson",
         student_t_df: Optional[float] = None,
         student_t_df_grid: Optional[list] = None,
         peptide_non_negative: bool = True,
         clip_columns: Optional[dict] = None,
->>>>>>> troubleshooting
         categorical_columns: Optional[list[str]] = None,
     ):
         self.sdv_preprocessor = sdv_preprocessor
@@ -70,14 +67,11 @@ class GaussianCopulaBasic(SynthetizationModelInterface):
         self.marginal_distribution_estimator = marginal_distribution_estimator
 
         self.copula_type = copula_type
-<<<<<<< HEAD
-=======
         self.corr_method = corr_method
         self.student_t_df = student_t_df
         self.student_t_df_grid = student_t_df_grid or [2, 3, 5, 10, 20, 50]
         self.peptide_non_negative = peptide_non_negative
         self.clip_columns = clip_columns or {}
->>>>>>> troubleshooting
 
         self.copula: Optional[CopulaDistribution] = None
         self._model_signature_to_save: Optional[ModelSignature] = None
@@ -234,11 +228,6 @@ class GaussianCopulaBasic(SynthetizationModelInterface):
 
         reversed_data_pd = reversed_data_pd.fill_null(0.0)
 
-<<<<<<< HEAD
-        logger.success("Synthetic data generation complete.")
-        return reversed_data_pd
-
-=======
         logger.info("Applying domain constraints...")
         reversed_data_pd = self._apply_domain_constraints(reversed_data_pd)
 
@@ -303,7 +292,6 @@ class GaussianCopulaBasic(SynthetizationModelInterface):
             df = df.with_columns(expressions)
         return df
 
->>>>>>> troubleshooting
     def transform_to_corr_space(self, X: np.ndarray) -> np.ndarray:
         if not self.fitted:
             match self.copula_type:
@@ -348,20 +336,12 @@ class GaussianCopulaBasic(SynthetizationModelInterface):
         )
         logger.success("Marginal distribution fitting complete.")
 
-<<<<<<< HEAD
-        logger.info("Fitting Gaussian Copula correlation matrix...")
-=======
         logger.info(f"Fitting copula correlation matrix (method={self.corr_method})...")
->>>>>>> troubleshooting
         preprocessed_data_np = self.transform_to_corr_space(
             preprocessed_dataset_pl.to_numpy()
         )
 
-<<<<<<< HEAD
-        estimated_correlation = np.corrcoef(preprocessed_data_np, rowvar=False)
-=======
         estimated_correlation = self._estimate_corr_matrix(preprocessed_data_np)
->>>>>>> troubleshooting
 
         logger.info("Nearest correlation matrix fitting...")
         estimated_correlation = statsmodels.stats.correlation_tools.corr_clipped(
@@ -379,9 +359,6 @@ class GaussianCopulaBasic(SynthetizationModelInterface):
                     corr=estimated_correlation, allow_singular=True
                 )
             case "student_t":
-<<<<<<< HEAD
-                fitted_cop = StudentTCopula(corr=estimated_correlation, df=1)
-=======
                 if self.student_t_df is None:
                     df = self._estimate_student_t_df(preprocessed_data_np)
                     logger.info(f"Estimated Student-T df from data: {df:.2f}")
@@ -389,7 +366,6 @@ class GaussianCopulaBasic(SynthetizationModelInterface):
                     df = float(self.student_t_df)
                     logger.info(f"Using fixed Student-T df: {df}")
                 fitted_cop = StudentTCopula(corr=estimated_correlation, df=df)
->>>>>>> troubleshooting
             case _:
                 raise ValueError(f"Unknown copula type: {self.copula_type}")
 
