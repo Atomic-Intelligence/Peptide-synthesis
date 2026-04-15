@@ -1,0 +1,145 @@
+# Configuration for the unified evaluate.py script
+# Run with: python -m src.evaluation.evaluate
+# Override any value on the CLI, e.g.:
+#   python -m src.evaluation.evaluate paths.real_data_path=/data/real.csv
+
+# ---------------------------------------------------------------------------
+# Data paths
+# ---------------------------------------------------------------------------
+paths:
+  real_data_path: resources/toy_data.csv          # required — path to real CSV
+  synthetic_data_path: null     # required — path to synthetic CSV
+  output_dir: ./evaluation_output
+
+# ---------------------------------------------------------------------------
+# Column selection
+# ---------------------------------------------------------------------------
+# Restrict evaluation to these columns (null = all common columns)
+columns: null
+# Columns to treat as categorical (null = numeric-only inference)
+categorical_columns: 
+ - "Geschlecht (1=female)"
+ - "diabetes"
+ - "Kidney disease"
+ - "hypertension"
+ - "CVD"
+# ID columns to drop before evaluation (e.g. patient/sample identifiers)
+id_columns: 
+  - "idAuswertung"
+
+# ---------------------------------------------------------------------------
+# Preprocessing
+# ---------------------------------------------------------------------------
+drop_nan: true   # if true, drop rows with any null/NaN before evaluation
+
+# ---------------------------------------------------------------------------
+# Per-event evaluation
+# ---------------------------------------------------------------------------
+# Split data by event_type and run a separate fidelity+privacy report for each.
+# Figures are saved to <output_dir>/<event>/, metrics to metrics_<event>.json.
+per_event_evaluation:
+  enabled: true
+  column: event_type         # column used for stratification (excluded from features)
+  event_types:
+    - hf
+    - ckd
+    - no_event
+
+# ---------------------------------------------------------------------------
+# Output settings
+# ---------------------------------------------------------------------------
+save_figures: true
+figures_fmt: png    # png | pdf | svg
+figures_dpi: 150
+save_json: true     # writes metrics.json to output_dir
+
+# ---------------------------------------------------------------------------
+# Fidelity
+# ---------------------------------------------------------------------------
+run_fidelity: true
+fidelity:
+  run_marginal: true
+  run_correlation: true
+  run_joint: true
+  run_classifier: true
+  run_corr_uncertainty: true
+  run_effect_size: true
+  corr_method: spearman           # spearman | pearson
+  max_correlation_cols: 60
+  n_bootstrap: 200                # raise to 1000 for publication-quality CIs
+  max_corr_uncertainty_cols: 30
+  n_classifier_folds: 4
+  classifier_type: logistic_regression  # random_forest | logistic_regression | svc | gradient_boosted
+  # Exclude sparse peptide columns from classifier and joint tests.
+  # Peptides with a zero fraction above this threshold are dropped (null = disabled).
+  peptide_zero_threshold: null
+  # Run separate two-sample classifier tests per zero-fraction band.
+  # Each entry is [lo, hi) — peptides with zero fraction in [lo, hi) are tested together
+  # alongside all clinical columns.
+  # When set, peptide_zero_threshold is ignored for the classifier (ranges take over).
+  # Set to null to run a single combined test (default behaviour).
+  peptide_zero_ranges: null
+  # Evaluate which sparse (histogram-imputed) peptides differ most / least from real.
+  run_sparse_peptide: true
+  # Number of most- and least-divergent sparse peptides to store and plot (2×2 grid).
+  sparse_peptide_n_top: 4
+  effect_size_metrics:
+    continuous:
+      - cohen_d
+      - rank_biserial
+      - median_abs_shift
+      - cles
+      - overlap_coef
+      - normalized_wasserstein
+      - mann_whitney_p
+    categorical:
+      - hellinger
+      - js_divergence
+
+# ---------------------------------------------------------------------------
+# Privacy
+# ---------------------------------------------------------------------------
+run_privacy: true
+privacy:
+  run_dcr: true
+  run_authenticity: false
+  run_reidentification: true
+  holdout_fraction: 0.5
+  par_percentile: 5.0
+  authenticity_threshold: 1.0
+  # Re-identification risk: gap = d(2nd-NN_synth) / d(1st-NN_synth) per real record.
+  # Records with gap > reid_risk_threshold are flagged as at risk.
+  reid_risk_threshold: 2.0
+  dcr_distance_metric: gower   # euclidean | gower
+  reid_distance_metric: gower  # euclidean | gower
+  # ---------------------------------------------------------------------------
+  # Singling out / Linkability / Attribute inference (Giomi et al. framework)
+  # ---------------------------------------------------------------------------
+  run_singling_out: true
+  run_linkability: true
+  run_attribute_inference: true
+  # Number of attack queries per evaluator (higher = more accurate but slower).
+  n_anonymeter_attacks: 2000
+  # Parallelism for NearestNeighbors (-1 = all cores).
+  anonymeter_n_jobs: -1
+  # Multivariate singling-out: record is singled out when d(2nd-NN)/d(1st-NN) exceeds this.
+  gap_ratio_threshold: 2.0
+  # Attribute inference: relative tolerance for numerical columns (10% of column range).
+  inference_tolerance: 0.1
+  # Membership inference attack (classifier-based, worst-case AUC across strategies).
+  run_membership_inference: true
+  # Attack signal: "dcr" | "likelihood" | "both" (likelihood requires a model with log_prob).
+  mia_attack_signal: dcr
+  # Classifier for the MIA attack: "logistic_regression" | "gradient_boosting" | "random_forest".
+  mia_classifier: logistic_regression
+  # Cross-validation folds for the attack classifier.
+  mia_n_folds: 5
+  # Score threshold above which a member is flagged as high-risk.
+  mia_high_risk_threshold: 0.9
+  # Linkability attack auxiliary columns: two lists [cols_A, cols_B].
+  # null = split all columns 50/50 randomly (default).
+  # Example: [[col1, col2], [col3, col4]]
+  linkability_aux_cols: null
+  # Columns the adversary tries to infer in the attribute inference attack.
+  # null = defaults to categorical_columns.
+  inference_target_cols: null

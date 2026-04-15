@@ -1,5 +1,9 @@
 _target_: src.models.copulas.gaussian_copula.gaussian_copula_basic.GaussianCopulaBasic
 
+<<<<<<< HEAD
+=======
+# ── Marginal distribution fitting ────────────────────────────────────────────
+>>>>>>> troubleshooting
 marginal_distribution_estimator:
   _target_: src.models.copulas.marginal_distributions.marginal_distribution_estimator.MarginalDistributionEstimator
   continuous_distributions:
@@ -11,16 +15,58 @@ marginal_distribution_estimator:
     - stats.t
     - stats.uniform
     - stats.expon
+<<<<<<< HEAD
   univariate_distribution_metric:
     _target_: src.models.copulas.marginal_distributions.marginal_distribution_metrics.KullbackLeiblerDivergence
 
 sdv_preprocessor:
   _target_: src.models.copulas.gaussian_copula.preprocessing.SDVPreprocessor
+=======
+  # Metric used to select the best-fitting distribution per column.
+  # Options (all defined in marginal_distribution_metrics.py):
+  #   KullbackLeiblerDivergence  — original default; can overfit to shape
+  #   BIC                        — penalises model complexity; recommended for small n
+  #   AIC                        — similar to BIC, weaker penalty
+  #   KolmogorovSmirnovTest      — distribution-free goodness-of-fit
+  #   JensenShannonDivergence    — symmetric, bounded; robust to heavy tails
+  #   WassersteinDistance        — earth-mover distance; slow but accurate
+  univariate_distribution_metric:
+    _target_: src.models.copulas.marginal_distributions.marginal_distribution_metrics.KullbackLeiblerDivergence
+
+  # Passed automatically by GaussianCopulaBasic._fit; set here if using the
+  # estimator standalone.
+  categorical_encoding: truncated_gaussian   # truncated_gaussian | normal_scores
+
+  # ── Zero-inflated distributions (improvement 1.3) ────────────────────────
+  # Try ZeroInflatedGamma and ZeroInflatedLognormal for columns with exact
+  # zeros (e.g. sparse peptide measurements not caught by the non_zero_threshold).
+  use_zero_inflated: true
+
+  # ── KDE fallback (improvement 1.3) ───────────────────────────────────────
+  # If true, fall back to non-parametric KDE for columns where the best
+  # parametric distribution fails a KS test at the kde_min_ks_pvalue level.
+  kde_fallback: false
+
+  # KS test significance threshold for the KDE fallback decision.
+  kde_min_ks_pvalue: 0.05
+
+sdv_preprocessor:
+  _target_: src.models.copulas.gaussian_copula.preprocessing.SDVPreprocessor
+  # Categorical encoding strategy (improvement 2.1):
+  #   "truncated_gaussian"  — original: random sample from truncated Gaussian on
+  #                           the cumulative-probability interval [F_{i-1}, F_i).
+  #                           Values live in [0, 1].
+  #   "normal_scores"       — deterministic: maps each category to Phi^-1(midpoint).
+  #                           Values live in R; marginal is forced to N(0,1) so
+  #                           the copula round-trip is consistent.
+  categorical_encoding: truncated_gaussian
+>>>>>>> troubleshooting
 
 ml_flow_info:
   experiment_name: ${experiment_name}
   run_name: ${run_name}
 
+<<<<<<< HEAD
 categorical_columns: 
     - "Geschlecht (1=female)"
     - "Kidney disease"
@@ -31,3 +77,47 @@ categorical_columns:
 
 
 copula_type: gaussian
+=======
+# ── Categorical columns ───────────────────────────────────────────────────────
+categorical_columns:
+  - "Geschlecht (1=female)"
+  - "Kidney disease"
+  - "diabetes"
+  - "CVD"
+  - "hypertension"
+  - "event_type"
+
+# ── Copula type ───────────────────────────────────────────────────────────────
+# "gaussian"   — Gaussian copula (recommended starting point)
+# "student_t"  — Student-T copula; captures tail dependence
+copula_type: gaussian
+
+# ── Correlation estimation method (improvements 1.1 + 3.2) ───────────────────
+# "pearson"   — Pearson correlation computed on marginal-CDF-transformed data.
+#               Theoretically consistent with CopulaDistribution (fix 1.1).
+# "kendall"   — Kendall tau converted via sin(pi/2*tau).  Rank-based; handles
+#               non-linear monotone relationships and outliers.  O(d^2 n log n).
+# "spearman"  — Spearman rho converted via 2*sin(pi/6*rho).  Rank-based; faster
+#               than Kendall for large d.
+corr_method: pearson
+
+# ── Student-T degrees of freedom (improvement 1.2) ───────────────────────────
+# null  -> estimate from data by fitting stats.t to each column in copula space
+#          and taking the median df (recommended when copula_type = student_t).
+# float -> fix df to this value (e.g. 5.0); overrides automatic estimation.
+student_t_df: null
+
+# Grid searched when student_t_df is null (only relevant for copula_type=student_t).
+student_t_df_grid: [2, 3, 5, 10, 20, 50]
+
+# ── Post-generation domain constraints (improvement 1.4) ─────────────────────
+# Clip all columns matching (?i)peptide to [0, +inf).
+peptide_non_negative: true
+
+# Additional per-column clips: keys are Python regex patterns, values are [min, max].
+# Example:
+#   clip_columns:
+#     "^Age$": [0, 120]
+#     "BMI":   [10, 70]
+clip_columns: {}
+>>>>>>> troubleshooting

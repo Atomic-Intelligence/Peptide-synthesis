@@ -12,7 +12,11 @@ from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig
 
+<<<<<<< HEAD
 from src.mlflow import start_or_connect_mlflow_server
+=======
+from src.mlflow_utils import start_or_connect_mlflow_server
+>>>>>>> troubleshooting
 
 # Import all your existing modules
 from src.data.PeptideDataset import (
@@ -37,6 +41,12 @@ from src.evaluation.classifiers.machine_learning_efficiency import (
     train_on_real_estimate_on_synthetic,
     train_on_synthetic_test_on_real,
 )
+<<<<<<< HEAD
+=======
+from src.evaluation.fidelity.fidelity_report import FidelityReport
+from src.evaluation.privacy.privacy_report import PrivacyReport
+from src.evaluation.analysis.correlation_uncertainty import CorrelationUncertaintyEstimator
+>>>>>>> troubleshooting
 
 logging.basicConfig(level=logging.INFO)
 import warnings
@@ -192,6 +202,102 @@ def execute_tasks(executor, tasks):
     return results
 
 
+<<<<<<< HEAD
+=======
+def _run_fidelity_report(
+    run_id: str,
+    real_dataset: pl.DataFrame,
+    synthetic_dataset: pl.DataFrame,
+    fidelity_cfg,
+) -> None:
+    """Run the FidelityReport and log all results to the active MLflow run."""
+    from sklearn.preprocessing import RobustScaler
+
+    run_corr_uncertainty = getattr(fidelity_cfg, "run_corr_uncertainty", True)
+    n_bootstrap = getattr(fidelity_cfg, "n_bootstrap", 200)
+    n_classifier_folds = getattr(fidelity_cfg, "n_classifier_folds", 5)
+    classifier_type = getattr(fidelity_cfg, "classifier_type", "random_forest")
+    corr_method = getattr(fidelity_cfg, "corr_method", "spearman")
+    max_correlation_cols = getattr(fidelity_cfg, "max_correlation_cols", 60)
+    max_corr_uncertainty_cols = getattr(fidelity_cfg, "max_corr_uncertainty_cols", 30)
+    run_effect_size = getattr(fidelity_cfg, "run_effect_size", True)
+    _effect_size_cfg = getattr(fidelity_cfg, "effect_size_metrics", None)
+    effect_size_continuous = getattr(_effect_size_cfg, "continuous", None) if _effect_size_cfg else None
+    effect_size_categorical = getattr(_effect_size_cfg, "categorical", None) if _effect_size_cfg else None
+
+    report = FidelityReport(
+        categorical_columns=CATEGORICAL_CLINICAL_COLUMNS,
+        scaler=RobustScaler(),
+        run_corr_uncertainty=run_corr_uncertainty,
+        n_bootstrap=n_bootstrap,
+        n_classifier_folds=n_classifier_folds,
+        classifier_type=classifier_type,
+        corr_method=corr_method,
+        max_correlation_cols=max_correlation_cols,
+        max_corr_uncertainty_cols=max_corr_uncertainty_cols,
+        run_effect_size=run_effect_size,
+        effect_size_continuous_metrics=effect_size_continuous,
+        effect_size_categorical_metrics=effect_size_categorical,
+    )
+
+    peptide_cols = get_peptide_columns(real_dataset)
+    results = report.run(real_dataset, synthetic_dataset, columns=peptide_cols)
+
+    with mlflow.start_run(run_id=run_id, nested=True):
+        mlflow.log_metrics(results.summary())
+        mlflow.log_text(results.to_json(), "fidelity_report.json")
+        for fig_name, fig in results.figures.items():
+            mlflow.log_figure(fig, f"fidelity/{fig_name}.png")
+
+    logger.success("Fidelity report logged to MLflow.")
+
+
+def _run_privacy_report(
+    run_id: str,
+    real_dataset: pl.DataFrame,
+    synthetic_dataset: pl.DataFrame,
+    privacy_cfg,
+) -> None:
+    """Run the PrivacyReport and log all results to the active MLflow run."""
+    from sklearn.preprocessing import RobustScaler
+
+    holdout_fraction = getattr(privacy_cfg, "holdout_fraction", 0.5)
+    par_percentile = getattr(privacy_cfg, "par_percentile", 5.0)
+    run_dcr = getattr(privacy_cfg, "run_dcr", True)
+    run_authenticity = getattr(privacy_cfg, "run_authenticity", True)
+    authenticity_threshold = getattr(privacy_cfg, "authenticity_threshold", 1.0)
+    run_reidentification = getattr(privacy_cfg, "run_reidentification", True)
+    reid_risk_threshold = getattr(privacy_cfg, "reid_risk_threshold", 2.0)
+    dcr_distance_metric = getattr(privacy_cfg, "dcr_distance_metric", "euclidean")
+    reid_distance_metric = getattr(privacy_cfg, "reid_distance_metric", "euclidean")
+
+    report = PrivacyReport(
+        categorical_columns=CATEGORICAL_CLINICAL_COLUMNS,
+        scaler=RobustScaler(),
+        holdout_fraction=holdout_fraction,
+        par_percentile=par_percentile,
+        run_dcr=run_dcr,
+        run_authenticity=run_authenticity,
+        authenticity_threshold=authenticity_threshold,
+        run_reidentification=run_reidentification,
+        reid_risk_threshold=reid_risk_threshold,
+        dcr_distance_metric=dcr_distance_metric,
+        reid_distance_metric=reid_distance_metric,
+    )
+
+    peptide_cols = get_peptide_columns(real_dataset)
+    real_peptides = real_dataset.select(peptide_cols)
+    synth_peptides = synthetic_dataset.select(peptide_cols)
+
+    results = report.run(real_peptides, synth_peptides)
+
+    with mlflow.start_run(run_id=run_id, nested=True):
+        mlflow.log_metrics(results.summary())
+
+    logger.success("Privacy report logged to MLflow.")
+
+
+>>>>>>> troubleshooting
 def run_evaluation_pipeline(
     cfg: DictConfig, real_dataset, synthetic_dataset, classifier_models, executor
 ):
@@ -279,6 +385,29 @@ def run_evaluation_pipeline(
         real_dataset=real_dataset,
     )
 
+<<<<<<< HEAD
+=======
+    fidelity_cfg = getattr(cfg, "fidelity", None)
+    if fidelity_cfg is None or getattr(fidelity_cfg, "enabled", True):
+        tasks["fidelity_report"] = partial(
+            _run_fidelity_report,
+            run_id=run_id,
+            real_dataset=real_dataset,
+            synthetic_dataset=synthetic_dataset,
+            fidelity_cfg=fidelity_cfg if fidelity_cfg is not None else object(),
+        )
+
+    privacy_cfg = getattr(cfg, "privacy", None)
+    if privacy_cfg is None or getattr(privacy_cfg, "enabled", True):
+        tasks["privacy_report"] = partial(
+            _run_privacy_report,
+            run_id=run_id,
+            real_dataset=real_dataset,
+            synthetic_dataset=synthetic_dataset,
+            privacy_cfg=privacy_cfg if privacy_cfg is not None else object(),
+        )
+
+>>>>>>> troubleshooting
     # Execute all independent tasks using the shared executor
     reports = execute_tasks(executor, tasks)
 

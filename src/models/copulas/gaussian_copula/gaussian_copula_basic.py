@@ -54,6 +54,14 @@ class GaussianCopulaBasic(SynthetizationModelInterface):
         sdv_preprocessor: SDVPreprocessor,
         ml_flow_info: MlFlowTrainingRunInfo,
         copula_type: str = "gaussian",
+<<<<<<< HEAD
+=======
+        corr_method: str = "pearson",
+        student_t_df: Optional[float] = None,
+        student_t_df_grid: Optional[list] = None,
+        peptide_non_negative: bool = True,
+        clip_columns: Optional[dict] = None,
+>>>>>>> troubleshooting
         categorical_columns: Optional[list[str]] = None,
     ):
         self.sdv_preprocessor = sdv_preprocessor
@@ -62,6 +70,14 @@ class GaussianCopulaBasic(SynthetizationModelInterface):
         self.marginal_distribution_estimator = marginal_distribution_estimator
 
         self.copula_type = copula_type
+<<<<<<< HEAD
+=======
+        self.corr_method = corr_method
+        self.student_t_df = student_t_df
+        self.student_t_df_grid = student_t_df_grid or [2, 3, 5, 10, 20, 50]
+        self.peptide_non_negative = peptide_non_negative
+        self.clip_columns = clip_columns or {}
+>>>>>>> troubleshooting
 
         self.copula: Optional[CopulaDistribution] = None
         self._model_signature_to_save: Optional[ModelSignature] = None
@@ -218,9 +234,76 @@ class GaussianCopulaBasic(SynthetizationModelInterface):
 
         reversed_data_pd = reversed_data_pd.fill_null(0.0)
 
+<<<<<<< HEAD
         logger.success("Synthetic data generation complete.")
         return reversed_data_pd
 
+=======
+        logger.info("Applying domain constraints...")
+        reversed_data_pd = self._apply_domain_constraints(reversed_data_pd)
+
+        logger.success("Synthetic data generation complete.")
+        return reversed_data_pd
+
+    def _estimate_corr_matrix(self, data: np.ndarray) -> np.ndarray:
+        """Estimate correlation matrix using the configured corr_method."""
+        match self.corr_method:
+            case "pearson":
+                return np.corrcoef(data, rowvar=False)
+            case "kendall":
+                n_cols = data.shape[1]
+                tau_mat = np.eye(n_cols)
+                for i in range(n_cols):
+                    for j in range(i + 1, n_cols):
+                        tau, _ = stats.kendalltau(data[:, i], data[:, j])
+                        tau_mat[i, j] = tau_mat[j, i] = tau
+                return np.sin(np.pi / 2 * tau_mat)
+            case "spearman":
+                rho_result, _ = stats.spearmanr(data)
+                if data.shape[1] == 1:
+                    rho_mat = np.array([[1.0]])
+                elif not isinstance(rho_result, np.ndarray):
+                    rho_mat = np.array([[1.0, rho_result], [rho_result, 1.0]])
+                else:
+                    rho_mat = rho_result
+                return 2 * np.sin(np.pi / 6 * rho_mat)
+            case _:
+                raise ValueError(f"Unknown corr_method: {self.corr_method!r}")
+
+    def _estimate_student_t_df(self, data: np.ndarray) -> float:
+        """Estimate Student-T df by fitting stats.t per column and taking the median."""
+        dfs = []
+        for col_idx in range(data.shape[1]):
+            try:
+                df, _, _ = stats.t.fit(data[:, col_idx], floc=0, fscale=1)
+                if np.isfinite(df) and df > 0:
+                    dfs.append(df)
+            except Exception:
+                pass
+        return float(np.median(dfs)) if dfs else 5.0
+
+    def _apply_domain_constraints(self, df: pl.DataFrame) -> pl.DataFrame:
+        """Clip columns according to peptide_non_negative and clip_columns config."""
+        expressions = []
+
+        if self.peptide_non_negative:
+            for col in df.columns:
+                if re.search(r"(?i)peptide", col):
+                    expressions.append(pl.col(col).clip(lower_bound=0.0).alias(col))
+
+        for pattern, bounds in self.clip_columns.items():
+            lo, hi = bounds[0], bounds[1]
+            for col in df.columns:
+                if re.search(pattern, col):
+                    expressions.append(
+                        pl.col(col).clip(lower_bound=lo, upper_bound=hi).alias(col)
+                    )
+
+        if expressions:
+            df = df.with_columns(expressions)
+        return df
+
+>>>>>>> troubleshooting
     def transform_to_corr_space(self, X: np.ndarray) -> np.ndarray:
         if not self.fitted:
             match self.copula_type:
@@ -265,12 +348,20 @@ class GaussianCopulaBasic(SynthetizationModelInterface):
         )
         logger.success("Marginal distribution fitting complete.")
 
+<<<<<<< HEAD
         logger.info("Fitting Gaussian Copula correlation matrix...")
+=======
+        logger.info(f"Fitting copula correlation matrix (method={self.corr_method})...")
+>>>>>>> troubleshooting
         preprocessed_data_np = self.transform_to_corr_space(
             preprocessed_dataset_pl.to_numpy()
         )
 
+<<<<<<< HEAD
         estimated_correlation = np.corrcoef(preprocessed_data_np, rowvar=False)
+=======
+        estimated_correlation = self._estimate_corr_matrix(preprocessed_data_np)
+>>>>>>> troubleshooting
 
         logger.info("Nearest correlation matrix fitting...")
         estimated_correlation = statsmodels.stats.correlation_tools.corr_clipped(
@@ -288,7 +379,17 @@ class GaussianCopulaBasic(SynthetizationModelInterface):
                     corr=estimated_correlation, allow_singular=True
                 )
             case "student_t":
+<<<<<<< HEAD
                 fitted_cop = StudentTCopula(corr=estimated_correlation, df=1)
+=======
+                if self.student_t_df is None:
+                    df = self._estimate_student_t_df(preprocessed_data_np)
+                    logger.info(f"Estimated Student-T df from data: {df:.2f}")
+                else:
+                    df = float(self.student_t_df)
+                    logger.info(f"Using fixed Student-T df: {df}")
+                fitted_cop = StudentTCopula(corr=estimated_correlation, df=df)
+>>>>>>> troubleshooting
             case _:
                 raise ValueError(f"Unknown copula type: {self.copula_type}")
 

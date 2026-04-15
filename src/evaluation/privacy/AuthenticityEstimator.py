@@ -15,6 +15,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from tqdm import tqdm
 
+<<<<<<< HEAD
+=======
+from src.evaluation.privacy.preprocessing import FeatureProcessor, Scaler as _Scaler  # shared utility
+
+>>>>>>> troubleshooting
 # Define types for clarity
 Scaler = Union[QuantileTransformer, RobustScaler, StandardScaler, MinMaxScaler]
 
@@ -44,6 +49,7 @@ class AuthenticityResults(BaseModel):
         }
 
 
+<<<<<<< HEAD
 class FeatureProcessor:
     """Handles transformation of features - separate from main estimation logic."""
 
@@ -111,6 +117,8 @@ class FeatureProcessor:
         return self.transform(dataframe)
 
 
+=======
+>>>>>>> troubleshooting
 class AuthenticityEstimator:
     """Evaluates the authenticity of synthetic data compared to real data."""
 
@@ -122,8 +130,17 @@ class AuthenticityEstimator:
         authenticity_threshold: float = 1.0,
         verbose: bool = True,
         metric: str | Callable = "minkowski",
+<<<<<<< HEAD
     ):
         self.feature_processor = FeatureProcessor(scaler, categorical_columns)
+=======
+        fitted_feature_processor: Optional[FeatureProcessor] = None,
+    ):
+        if fitted_feature_processor is not None:
+            self.feature_processor = fitted_feature_processor
+        else:
+            self.feature_processor = FeatureProcessor(scaler, categorical_columns)
+>>>>>>> troubleshooting
         self.knn = NearestNeighbors(algorithm=algorithm, metric=metric)
         self.authenticity_threshold = authenticity_threshold
         self.verbose = verbose
@@ -134,7 +151,14 @@ class AuthenticityEstimator:
         """Fit the model on real data."""
         logger.info("Preparing real data for modeling")
         self.real_dataframe = real_dataframe
+<<<<<<< HEAD
         self.real_data = self.feature_processor.fit_transform(real_dataframe)
+=======
+        if self.feature_processor.fitted:
+            self.real_data = self.feature_processor.transform(real_dataframe)
+        else:
+            self.real_data = self.feature_processor.fit_transform(real_dataframe)
+>>>>>>> troubleshooting
 
         logger.info("Fitting nearest neighbors model")
         self.knn.fit(self.real_data)

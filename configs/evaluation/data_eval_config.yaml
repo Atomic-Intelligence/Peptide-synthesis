@@ -8,6 +8,37 @@ event_types:
     display_name: "Chronic Kidney Disease"
     time_to_event_column: "time-to-CKDevent(to event or last visit)"
 
+<<<<<<< HEAD
+=======
+# Fidelity report settings (all modules run in parallel alongside existing tasks)
+fidelity:
+  enabled: true
+  corr_method: spearman
+  max_correlation_cols: 60
+  run_corr_uncertainty: true
+  n_bootstrap: 200              # raise to 1000 for production runs
+  max_corr_uncertainty_cols: 30
+  n_classifier_folds: 5
+  classifier_type: random_forest
+
+# Privacy report settings (runs in parallel alongside fidelity report)
+privacy:
+  enabled: true
+  holdout_fraction: 0.5
+  par_percentile: 5.0
+  run_dcr: true
+  dcr_distance_metric: euclidean    # euclidean | gower
+  run_authenticity: true
+  authenticity_threshold: 1.0
+  run_mia: false
+  mia_holdout_fraction: 0.2
+  mia_attack_signal: dcr
+  mia_n_folds: 5
+  run_reidentification: false
+  reid_risk_threshold: 0.5
+  reid_distance_metric: euclidean   # euclidean | gower
+
+>>>>>>> troubleshooting
 defaults:
   - _self_
   - svm_peptide_ids: ids.yaml

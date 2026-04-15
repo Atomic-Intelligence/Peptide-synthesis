@@ -1,0 +1,35 @@
+_target_: src.models.Imputation.KDEImputation.KDEImputation
+
+# ── Bandwidth ─────────────────────────────────────────────────────────────────
+# Passed to scipy.stats.gaussian_kde bw_method:
+#   "scott"     — Scott's rule of thumb  (default; good general-purpose choice)
+#   "silverman" — Silverman's rule of thumb (similar to Scott, slightly smoother)
+#   <float>     — fixed bandwidth scaling factor (e.g. 0.3)
+bandwidth: scott
+
+# ── Boundary correction ───────────────────────────────────────────────────────
+# Prevents KDE from assigning probability mass below lower_bound.
+#   "reflect" (recommended) — reflect samples that fall below the bound back
+#              above it.  Conserves probability mass without truncation bias.
+#   "clip"    — clamp samples to [lower_bound, +inf).  Simple but shifts the
+#              marginal mean upward for heavy-tailed distributions.
+#   "none"    — no correction; KDE may produce values below the bound.
+boundary_correction: reflect
+
+# ── Lower bound ───────────────────────────────────────────────────────────────
+# Hard lower boundary for boundary_correction and zero-inflation handling.
+# Set to null to disable both features (e.g. for columns that can take any
+# real value).
+lower_bound: 0.0
+
+# ── Zero-inflation handling ───────────────────────────────────────────────────
+# If true, model the point mass at exactly lower_bound separately and fit KDE
+# only on the strictly-above-bound values.  Strongly recommended for sparse
+# peptide measurements where many rows are exactly zero.
+handle_zero_inflation: true
+
+# ── Parallelism ───────────────────────────────────────────────────────────────
+# Number of parallel workers used during fit.
+# -1 uses all available CPU cores (recommended).
+# Uses threads; scipy releases the GIL during KDE fitting.
+n_jobs: -1

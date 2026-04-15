@@ -159,7 +159,12 @@ cython_debug/
 *.xlsx
 
 # Do not ignore .csv files in the resources directory
+<<<<<<< HEAD
 !resources/*.csv
+=======
+!resources/toy_data_sparse.csv
+!resources/toy_data.csv
+>>>>>>> troubleshooting
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
@@ -169,4 +174,15 @@ cython_debug/
 #.idea/
 
 # Ignore doodle files
+<<<<<<< HEAD
 **doodle.*
+=======
+**doodle.*
+
+merged_peptide_and_clinical.csv
+
+resources/merged_peptide_and_clinical.csv
+outputs/**
+
+hydra/**
+>>>>>>> troubleshooting

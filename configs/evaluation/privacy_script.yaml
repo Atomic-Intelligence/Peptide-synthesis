@@ -4,8 +4,30 @@ description: "Comparing Data Authenticity for Copula Generated Data for all case
 
 zero_percentage: 0.4
 
+<<<<<<< HEAD
 defaults:
   - authenticity_estimator: knn_authenticity 
   - paths: paths
   - mlflow: mlflow  
+=======
+# Distance to Closest Record
+run_dcr: true
+dcr:
+  holdout_fraction: 0.5     # fraction of real data used as holdout baseline
+  par_percentile: 5.0       # Privacy-at-Risk threshold (5th percentile of real holdout DCR)
+  distance_metric: gower # euclidean | gower
+
+# Re-identification Risk
+# gap = d(2nd-NN_synth) / d(1st-NN_synth) per real record (real → synth direction).
+# Records with gap > risk_threshold are flagged as at risk of re-identification.
+run_reidentification: true
+reidentification:
+  risk_threshold: 2.0       # gap threshold for at-risk classification
+  distance_metric: gower    # euclidean | gower
+
+defaults:
+  - authenticity_estimator: knn_authenticity
+  - paths: paths
+  - mlflow: mlflow
+>>>>>>> troubleshooting
   - _self_

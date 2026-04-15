@@ -24,6 +24,10 @@ pydantic = "^2.10.6"
 numpy = "2.1"
 statsmodels = "^0.14.4"
 notebook = "^7.4.5"
+<<<<<<< HEAD
+=======
+optuna = "^3.0"
+>>>>>>> troubleshooting
 
 
 [build-system]
