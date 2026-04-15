@@ -109,8 +109,19 @@ class DataProcessor:
             print(len(df))
 
     def split_event_control(self, event: str = "event") -> "DataProcessor":
-        """Split datasets into event and control groups based on the event type."""
+        """Split datasets into event and control groups based on the event type.
+
+        If event is 'all' or 'all_events', returns each DataFrame as-is without splitting.
+        """
         result_dfs = []
+
+        if event in ("all", "all_events"):
+            for df in self.processed_dfs:
+                event_df = df
+                result_dfs.append((event_df, None))
+            self.processed_dfs = result_dfs
+            return self
+
         for df in self.processed_dfs:
             event_df = df.filter(pl.col("event_type") == event)
             control_df = df.filter(pl.col("event_type") == "no_event")

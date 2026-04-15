@@ -257,12 +257,8 @@ def _run_privacy_report(
     run_dcr = getattr(privacy_cfg, "run_dcr", True)
     run_authenticity = getattr(privacy_cfg, "run_authenticity", True)
     authenticity_threshold = getattr(privacy_cfg, "authenticity_threshold", 1.0)
-    run_mia = getattr(privacy_cfg, "run_mia", False)
-    mia_holdout_fraction = getattr(privacy_cfg, "mia_holdout_fraction", 0.2)
-    mia_attack_signal = getattr(privacy_cfg, "mia_attack_signal", "dcr")
-    mia_n_folds = getattr(privacy_cfg, "mia_n_folds", 5)
-    run_reidentification = getattr(privacy_cfg, "run_reidentification", False)
-    reid_risk_threshold = getattr(privacy_cfg, "reid_risk_threshold", 0.5)
+    run_reidentification = getattr(privacy_cfg, "run_reidentification", True)
+    reid_risk_threshold = getattr(privacy_cfg, "reid_risk_threshold", 2.0)
     dcr_distance_metric = getattr(privacy_cfg, "dcr_distance_metric", "euclidean")
     reid_distance_metric = getattr(privacy_cfg, "reid_distance_metric", "euclidean")
 
@@ -274,10 +270,6 @@ def _run_privacy_report(
         run_dcr=run_dcr,
         run_authenticity=run_authenticity,
         authenticity_threshold=authenticity_threshold,
-        run_mia=run_mia,
-        mia_holdout_fraction=mia_holdout_fraction,
-        mia_attack_signal=mia_attack_signal,
-        mia_n_folds=mia_n_folds,
         run_reidentification=run_reidentification,
         reid_risk_threshold=reid_risk_threshold,
         dcr_distance_metric=dcr_distance_metric,

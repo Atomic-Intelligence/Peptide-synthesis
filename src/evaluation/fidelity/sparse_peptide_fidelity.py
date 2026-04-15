@@ -147,7 +147,7 @@ class SparsePeptideFidelityEstimator:
     def __init__(
         self,
         zero_fraction_threshold: float = 0.4,
-        n_top: int = 3,
+        n_top: int = 4,
     ):
         self.zero_fraction_threshold = zero_fraction_threshold
         self.n_top = n_top
@@ -255,7 +255,7 @@ class SparsePeptideFidelityEstimator:
         results: SparsePeptideFidelityResults,
         real_df: pl.DataFrame,
         synth_df: pl.DataFrame,
-        n_show: int = 3,
+        n_show: int = 4,
     ) -> plt.Figure:
         """Produce a summary figure for sparse-peptide fidelity.
 
@@ -265,9 +265,8 @@ class SparsePeptideFidelityEstimator:
            score.  Most-divergent bars are coloured red, least-divergent
            bars green, and the remainder grey.
         2. **Distribution panels** — overlapping histograms for the
-           *n_show* most-divergent (top row) and *n_show* least-divergent
-           (bottom row) sparse peptides, so the viewer can see both *how*
-           and *how much* the distributions differ.
+           *n_show* most-divergent and *n_show* least-divergent sparse
+           peptides, each arranged in a 2×2 grid.
 
         Parameters
         ----------
@@ -276,18 +275,19 @@ class SparsePeptideFidelityEstimator:
         real_df, synth_df :
             The original DataFrames (needed to draw distributions).
         n_show :
-            Number of most- and least-divergent columns to plot.
+            Number of most- and least-divergent columns to plot (default 4,
+            laid out as a 2×2 grid per section).
         """
         if not results.sparse_columns:
-            fig, ax = plt.subplots(figsize=(5, 2))
+            fig, ax = plt.subplots(figsize=(6, 2.5))
             ax.text(
                 0.5, 0.5,
                 "No sparse peptide columns found\n"
                 f"(threshold: {results.zero_threshold:.0%})",
-                ha="center", va="center", transform=ax.transAxes,
+                ha="center", va="center", transform=ax.transAxes, fontsize=12,
             )
             ax.axis("off")
-            fig.suptitle("Sparse-Peptide Fidelity (Histogram-Imputed)", fontsize=11)
+            fig.suptitle("Sparse-Peptide Fidelity (Histogram-Imputed)", fontsize=13)
             return fig
 
         scored = sorted(
@@ -300,16 +300,22 @@ class SparsePeptideFidelityEstimator:
 
         n_top = min(n_show, len(results.most_divergent))
         n_bot = min(n_show, len(results.least_divergent))
-        n_dist_cols = max(n_top, n_bot, 1)
-        n_dist_rows = (1 if n_top > 0 else 0) + (1 if n_bot > 0 else 0)
+
+        # Each section uses a 2-column grid; rows needed = ceil(n / 2)
+        GRID_COLS = 2
+        rows_top = (n_top + 1) // 2 if n_top > 0 else 0
+        rows_bot = (n_bot + 1) // 2 if n_bot > 0 else 0
+        n_dist_sections = rows_top + rows_bot  # total panel rows below histogram
 
         # ── layout ────────────────────────────────────────────────────────
-        fig_height = 3.5 + 3.0 * n_dist_rows
-        fig = plt.figure(figsize=(max(8, 3.5 * n_dist_cols), fig_height))
+        total_gs_rows = 1 + n_dist_sections
+        row_heights = [2.8] + [3.8] * n_dist_sections
+        fig_height = sum(row_heights) * 0.9
+        fig = plt.figure(figsize=(GRID_COLS * 7, fig_height))
         gs = gridspec.GridSpec(
-            1 + n_dist_rows, n_dist_cols,
-            height_ratios=[2.5] + [2.8] * n_dist_rows,
-            hspace=0.55, wspace=0.35,
+            total_gs_rows, GRID_COLS,
+            height_ratios=row_heights,
+            hspace=0.65, wspace=0.35,
         )
 
         # ── 1. histogram of divergence scores ────────────────────────────
@@ -326,26 +332,27 @@ class SparsePeptideFidelityEstimator:
         ax_hist.hist(scores_arr, bins=bins, color="#aec7e8", edgecolor="white",
                      linewidth=0.3, label="All columns")
         if most_scores:
-            ax_hist.axvline(min(most_scores), color="#d62728", ls="--", lw=1.2,
+            ax_hist.axvline(min(most_scores), color="#d62728", ls="--", lw=1.5,
                             label=f"Most divergent (top {n_top})")
             for s in most_scores:
-                ax_hist.axvline(s, color="#d62728", ls="--", lw=0.7, alpha=0.5)
+                ax_hist.axvline(s, color="#d62728", ls="--", lw=0.9, alpha=0.5)
         if least_scores:
-            ax_hist.axvline(max(least_scores), color="#2ca02c", ls="--", lw=1.2,
+            ax_hist.axvline(max(least_scores), color="#2ca02c", ls="--", lw=1.5,
                             label=f"Least divergent (top {n_bot})")
             for s in least_scores:
-                ax_hist.axvline(s, color="#2ca02c", ls="--", lw=0.7, alpha=0.5)
+                ax_hist.axvline(s, color="#2ca02c", ls="--", lw=0.9, alpha=0.5)
 
-        ax_hist.set_xlabel("Divergence score  (1 − overlap coef)", fontsize=9)
-        ax_hist.set_ylabel("Number of columns", fontsize=9)
+        ax_hist.set_xlabel("Divergence score  (1 − overlap coef)", fontsize=12)
+        ax_hist.set_ylabel("Number of columns", fontsize=12)
         ax_hist.set_title(
             f"Sparse-Peptide Fidelity — {len(cols_ordered)} columns "
             f"(zero fraction > {results.zero_threshold:.0%})",
-            fontsize=10, fontweight="bold",
+            fontsize=13, fontweight="bold",
         )
-        ax_hist.legend(fontsize=7, loc="upper right")
+        ax_hist.legend(fontsize=10, loc="upper right")
+        ax_hist.tick_params(labelsize=10)
 
-        # ── 2. distribution panels ────────────────────────────────────────
+        # ── 2. distribution panels (2×2 grids) ───────────────────────────
         def _plot_dist(ax: plt.Axes, col: str, label: str) -> None:
             real_v = np.log1p(real_df[col].to_numpy().astype(float))
             synth_v = np.log1p(synth_df[col].to_numpy().astype(float))
@@ -356,7 +363,7 @@ class SparsePeptideFidelityEstimator:
                     color="darkorange", label="Real")
             ax.hist(synth_v, bins=bins, density=True, alpha=0.5,
                     color="steelblue", label="Synthetic")
-            ax.set_xlabel("log1p(value)", fontsize=6)
+            ax.set_xlabel("log1p(value)", fontsize=10)
             r_z = results.real_zero_pct.get(col, float("nan"))
             s_z = results.synth_zero_pct.get(col, float("nan"))
             div = next(
@@ -367,27 +374,33 @@ class SparsePeptideFidelityEstimator:
             if div is not None:
                 title += f"  div={div:.3f}"
             title += f"\nzero%: real={r_z:.1%}, synth={s_z:.1%}"
-            ax.set_title(title, fontsize=7)
-            ax.legend(fontsize=6)
-            ax.tick_params(labelsize=6)
+            ax.set_title(title, fontsize=10)
+            ax.legend(fontsize=9)
+            ax.tick_params(labelsize=9)
+
+        def _fill_section(gs_row_start: int, items: list, label: str) -> None:
+            """Place items in a 2-column grid starting at gs_row_start."""
+            for idx, item in enumerate(items):
+                row = gs_row_start + idx // GRID_COLS
+                col = idx % GRID_COLS
+                ax = fig.add_subplot(gs[row, col])
+                _plot_dist(ax, item.column, label)
+            # Hide any unused cells in the last row
+            n_items = len(items)
+            last_row_start = gs_row_start + (n_items - 1) // GRID_COLS
+            used_in_last = n_items % GRID_COLS
+            if used_in_last != 0:
+                for col in range(used_in_last, GRID_COLS):
+                    ax = fig.add_subplot(gs[last_row_start, col])
+                    ax.axis("off")
 
         dist_row = 1
         if n_top > 0:
-            for i in range(n_dist_cols):
-                ax = fig.add_subplot(gs[dist_row, i])
-                if i < n_top:
-                    _plot_dist(ax, results.most_divergent[i].column, "most divergent")
-                else:
-                    ax.axis("off")
-            dist_row += 1
+            _fill_section(dist_row, results.most_divergent[:n_top], "most divergent")
+            dist_row += rows_top
 
         if n_bot > 0:
-            for i in range(n_dist_cols):
-                ax = fig.add_subplot(gs[dist_row, i])
-                if i < n_bot:
-                    _plot_dist(ax, results.least_divergent[i].column, "least divergent")
-                else:
-                    ax.axis("off")
+            _fill_section(dist_row, results.least_divergent[:n_bot], "least divergent")
 
         plt.tight_layout()
         return fig

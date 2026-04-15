@@ -1,19 +1,22 @@
 _target_: src.models.AdversarialRandomForests.ARFPipeline.ARFPipeline
 
 # MLflow run identity — resolved from the top-level pipeline config.
-run_info:
+ml_flow_info:
   experiment_name: ${experiment_name}
   run_name: ${run_name}
 
 # ── ARF hyper-parameters ──────────────────────────────────────────────────────
 arf_params:
   min_node_size: 5
-  num_trees: 35
-  max_features: 2
+  num_trees: 20
+  # "sqrt" ≈ sqrt(n_features) per split — standard RF default, much better
+  # than a fixed integer when the dataset has hundreds of peptide features.
+  max_features: "sqrt"
 
 # ── Feature scaler ────────────────────────────────────────────────────────────
 # Options: sklearn.preprocessing.QuantileTransformer
 #          sklearn.preprocessing.StandardScaler
 #          sklearn.preprocessing.RobustScaler
+#          sklearn.preprocessing.PowerTransformer
 scaler:
-  _target_: sklearn.preprocessing.QuantileTransformer
+  _target_: sklearn.preprocessing.RobustScaler

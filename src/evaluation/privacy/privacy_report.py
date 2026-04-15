@@ -1,21 +1,23 @@
-"""PrivacyReport — orchestrator for DCR, Authenticity, and MIA privacy metrics.
+"""PrivacyReport — orchestrator for all privacy metrics.
 
 Fits a single FeatureProcessor on the real dataset and shares it between
-DCREstimator and AuthenticityEstimator, eliminating the redundant fit step
-that would otherwise occur when running both metrics independently.
+all estimators, eliminating the redundant fit step that would otherwise occur
+when running metrics independently.
 
-DCR, Authenticity, and MIA are complementary:
-  - DCR answers "are any synthetic records dangerously close to a real record?"
-    (privacy risk, compared to a real-to-real holdout baseline)
-  - Authenticity answers "do synthetic records look like plausible members of
-    the real distribution?" (data quality, per-record ratio vs. nearest real
-    neighbour's own nearest neighbour)
-  - MIA answers "can an adversary reliably tell which real records were used to
-    train the generative model?" (worst-case attacker perspective via a
-    logistic regression classifier trained on DCR-to-synthetic signals)
-
-The overlap is entirely in preprocessing (FeatureProcessor) and in the
-underlying synth→real kNN lookup, which this class computes once.
+Metrics
+-------
+  - DCR: "are any synthetic records dangerously close to a real record?"
+    (compared to a real-to-real holdout baseline)
+  - Authenticity: "do synthetic records look like plausible members of the
+    real distribution?" (per-record ratio vs. nearest real neighbour's own NN)
+  - Re-identification: "can an attacker link a real person to their synthetic
+    copy?" (gap ratio d(2nd-NN_synth) / d(1st-NN_synth))
+  - Singling out (anonymeter): can an adversary craft queries from the synthetic
+    data to uniquely identify a real individual? (univariate + multivariate)
+  - Linkability (anonymeter): can the synthetic data bridge two attribute
+    views of the same individual across datasets?
+  - Attribute inference (anonymeter): can the adversary infer unknown attribute
+    values from the nearest synthetic neighbour?
 
 Usage
 -----
@@ -37,7 +39,6 @@ from sklearn.preprocessing import RobustScaler
 from src.evaluation.privacy.preprocessing import FeatureProcessor, Scaler
 from src.evaluation.privacy.dcr import DCREstimator, DCRResults
 from src.evaluation.utils.eval_utils import sparse_peptide_columns
-from src.evaluation.privacy.membership_inference import MembershipInferenceAttack, MIAResults
 from src.evaluation.privacy.AuthenticityEstimator import (
     AuthenticityEstimator,
     AuthenticityResults,
@@ -46,14 +47,23 @@ from src.evaluation.privacy.reidentification_risk import (
     ReidentificationRiskEstimator,
     ReidentificationResults,
 )
+from src.evaluation.privacy.anonymeter_attacks import (
+    AnonymeterAttacksEstimator,
+    AnonymeterResults,
+)
+from src.evaluation.privacy.membership_inference import (
+    MembershipInferenceAttack,
+    MIAResults,
+)
 
 
 @dataclass
 class PrivacyResults:
     dcr: Optional[DCRResults] = None
     authenticity: Optional[AuthenticityResults] = None
-    mia: Optional[MIAResults] = None
     reidentification: Optional[ReidentificationResults] = None
+    anonymeter: Optional[AnonymeterResults] = None
+    mia: Optional[MIAResults] = None
 
     def summary(self) -> Dict[str, Any]:
         metrics: Dict[str, Any] = {}
@@ -63,17 +73,23 @@ class PrivacyResults:
             metrics.update(
                 {f"privacy/auth_{k}": v for k, v in self.authenticity.summary().items()}
             )
-        if self.mia is not None:
-            metrics.update({f"privacy/mia_{k}": v for k, v in self.mia.summary().items()})
         if self.reidentification is not None:
             metrics.update(
                 {f"privacy/reid_{k}": v for k, v in self.reidentification.summary().items()}
+            )
+        if self.anonymeter is not None:
+            metrics.update(
+                {f"privacy/{k}": v for k, v in self.anonymeter.summary().items()}
+            )
+        if self.mia is not None:
+            metrics.update(
+                {f"privacy/{k}": v for k, v in self.mia.summary().items()}
             )
         return metrics
 
 
 class PrivacyReport:
-    """Run DCR, Authenticity, and optionally MIA with a shared FeatureProcessor.
+    """Run DCR, Authenticity, Re-identification, and anonymeter attacks.
 
     Parameters
     ----------
@@ -82,7 +98,8 @@ class PrivacyReport:
     scaler :
         Sklearn scaler for numerical features.  Defaults to RobustScaler.
     holdout_fraction :
-        Fraction of real data held out for the DCR baseline.
+        Fraction of real data held out for the DCR baseline and anonymeter
+        control set.
     par_percentile :
         Privacy-at-Risk percentile threshold for DCR.
     run_dcr :
@@ -91,18 +108,12 @@ class PrivacyReport:
         Whether to run the Authenticity estimator.
     authenticity_threshold :
         Ratio threshold used by AuthenticityEstimator.
-    run_mia :
-        Whether to run the Membership Inference Attack.
-    mia_holdout_fraction :
-        Fraction of real data withheld as non-members for MIA.  Default 0.2.
-    mia_attack_signal :
-        Attack signal for MIA: ``"dcr"`` | ``"likelihood"`` | ``"both"``.
-    mia_n_folds :
-        Number of folds for stratified k-fold CV of the MIA attack classifier.
     run_reidentification :
-        Whether to run the Re-identification Risk estimator.
+        Whether to run the Re-identification Risk estimator.  Default True.
     reid_risk_threshold :
-        Distance-ratio threshold for re-identification risk.  Default 0.5.
+        Gap-ratio threshold for re-identification risk.
+        ``gap = d(2nd-NN_synth) / d(1st-NN_synth)``; records with
+        gap > threshold are flagged as at risk.  Default 2.0.
     dcr_distance_metric :
         Distance metric for DCR: ``"euclidean"`` or ``"gower"``.
     reid_distance_metric :
@@ -111,6 +122,23 @@ class PrivacyReport:
         Peptide columns whose real-data zero fraction exceeds this value are
         dropped before any privacy metric is computed.  ``None`` disables
         filtering (default).
+    run_singling_out :
+        Whether to run the anonymeter singling out attack (univariate +
+        multivariate).  Default True.
+    run_linkability :
+        Whether to run the anonymeter linkability attack.  Default True.
+    run_attribute_inference :
+        Whether to run the anonymeter attribute inference attack.  Default True.
+    n_anonymeter_attacks :
+        Number of attack queries for each anonymeter evaluator.  Default 2000.
+    linkability_aux_cols :
+        Tuple ``(columns_A, columns_B)`` for the linkability attack.
+        When ``None`` (default), columns are split 50 / 50 randomly.
+    inference_target_cols :
+        Columns the adversary tries to infer.  Defaults to
+        ``categorical_columns``.
+    anonymeter_n_jobs :
+        Parallelism for anonymeter evaluators.  Default -1 (all cores).
     """
 
     def __init__(
@@ -122,15 +150,25 @@ class PrivacyReport:
         run_dcr: bool = True,
         run_authenticity: bool = True,
         authenticity_threshold: float = 1.0,
-        run_mia: bool = False,
-        mia_holdout_fraction: float = 0.2,
-        mia_attack_signal: str = "dcr",
-        mia_n_folds: int = 5,
-        run_reidentification: bool = False,
-        reid_risk_threshold: float = 0.5,
+        run_reidentification: bool = True,
+        reid_risk_threshold: float = 2.0,
         dcr_distance_metric: str = "euclidean",
         reid_distance_metric: str = "euclidean",
         peptide_zero_threshold: Optional[float] = None,
+        run_singling_out: bool = True,
+        run_linkability: bool = True,
+        run_attribute_inference: bool = True,
+        n_anonymeter_attacks: int = 2000,
+        linkability_aux_cols: Optional[tuple] = None,
+        inference_target_cols: Optional[List[str]] = None,
+        anonymeter_n_jobs: int = -1,
+        gap_ratio_threshold: float = 2.0,
+        inference_tolerance: float = 0.1,
+        run_membership_inference: bool = True,
+        mia_attack_signal: str = "dcr",
+        mia_classifier: str = "logistic_regression",
+        mia_n_folds: int = 5,
+        mia_high_risk_threshold: float = 0.9,
     ):
         self.categorical_columns = categorical_columns or []
         self._scaler = scaler if scaler is not None else RobustScaler()
@@ -139,15 +177,25 @@ class PrivacyReport:
         self.run_dcr = run_dcr
         self.run_authenticity = run_authenticity
         self.authenticity_threshold = authenticity_threshold
-        self.run_mia = run_mia
-        self.mia_holdout_fraction = mia_holdout_fraction
-        self.mia_attack_signal = mia_attack_signal
-        self.mia_n_folds = mia_n_folds
         self.run_reidentification = run_reidentification
         self.reid_risk_threshold = reid_risk_threshold
         self.dcr_distance_metric = dcr_distance_metric
         self.reid_distance_metric = reid_distance_metric
         self.peptide_zero_threshold = peptide_zero_threshold
+        self.run_singling_out = run_singling_out
+        self.run_linkability = run_linkability
+        self.run_attribute_inference = run_attribute_inference
+        self.n_anonymeter_attacks = n_anonymeter_attacks
+        self.linkability_aux_cols = linkability_aux_cols
+        self.inference_target_cols = inference_target_cols
+        self.anonymeter_n_jobs = anonymeter_n_jobs
+        self.gap_ratio_threshold = gap_ratio_threshold
+        self.inference_tolerance = inference_tolerance
+        self.run_membership_inference = run_membership_inference
+        self.mia_attack_signal = mia_attack_signal
+        self.mia_classifier = mia_classifier
+        self.mia_n_folds = mia_n_folds
+        self.mia_high_risk_threshold = mia_high_risk_threshold
 
     def run(self, real_df: pl.DataFrame, synth_df: pl.DataFrame) -> PrivacyResults:
         """Run enabled privacy metrics with a shared FeatureProcessor.
@@ -214,20 +262,6 @@ class PrivacyReport:
             except Exception as exc:
                 logger.error(f"PrivacyReport: Authenticity failed — {exc}")
 
-        if self.run_mia:
-            try:
-                mia = MembershipInferenceAttack(
-                    holdout_fraction=self.mia_holdout_fraction,
-                    attack_signal=self.mia_attack_signal,
-                    n_folds=self.mia_n_folds,
-                    fitted_feature_processor=shared_fp,
-                )
-                mia.fit(real_df)
-                results.mia = mia.estimate(synth_df)
-                logger.success(f"PrivacyReport MIA: {results.mia.summary()}")
-            except Exception as exc:
-                logger.error(f"PrivacyReport: MIA failed — {exc}")
-
         if self.run_reidentification:
             try:
                 reid = ReidentificationRiskEstimator(
@@ -243,5 +277,48 @@ class PrivacyReport:
                 )
             except Exception as exc:
                 logger.error(f"PrivacyReport: Re-identification failed — {exc}")
+
+        run_any_anonymeter = (
+            self.run_singling_out or self.run_linkability or self.run_attribute_inference
+        )
+        if run_any_anonymeter:
+            try:
+                anon = AnonymeterAttacksEstimator(
+                    categorical_columns=self.categorical_columns,
+                    holdout_fraction=self.holdout_fraction,
+                    n_attacks=self.n_anonymeter_attacks,
+                    run_singling_out=self.run_singling_out,
+                    run_linkability=self.run_linkability,
+                    run_attribute_inference=self.run_attribute_inference,
+                    linkability_aux_cols=self.linkability_aux_cols,
+                    inference_target_cols=self.inference_target_cols,
+                    n_jobs=self.anonymeter_n_jobs,
+                    gap_ratio_threshold=self.gap_ratio_threshold,
+                    inference_tolerance=self.inference_tolerance,
+                )
+                anon.fit(real_df)
+                results.anonymeter = anon.estimate(synth_df)
+                logger.success(
+                    f"PrivacyReport Anonymeter: {results.anonymeter.summary()}"
+                )
+            except Exception as exc:
+                logger.error(f"PrivacyReport: Anonymeter attacks failed — {exc}")
+
+        if self.run_membership_inference:
+            try:
+                mia = MembershipInferenceAttack(
+                    scaler=self._scaler,
+                    categorical_columns=self.categorical_columns,
+                    holdout_fraction=self.holdout_fraction,
+                    attack_signal=self.mia_attack_signal,
+                    classifier=self.mia_classifier,
+                    n_folds=self.mia_n_folds,
+                    high_risk_threshold=self.mia_high_risk_threshold,
+                )
+                mia.fit(real_df)
+                results.mia = mia.estimate(synth_df)
+                logger.success(f"PrivacyReport MIA: {results.mia.summary()}")
+            except Exception as exc:
+                logger.error(f"PrivacyReport: Membership Inference Attack failed — {exc}")
 
         return results

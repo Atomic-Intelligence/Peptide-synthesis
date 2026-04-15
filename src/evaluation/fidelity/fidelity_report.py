@@ -38,6 +38,7 @@ fidelity/effect_size/median_abs_shift
 fidelity/effect_size/cles
 fidelity/effect_size/overlap_coef
 fidelity/effect_size/normalized_wasserstein
+fidelity/effect_size/mann_whitney_p
 fidelity/effect_size/hellinger
 fidelity/effect_size/js_divergence
 """
@@ -50,7 +51,7 @@ import polars as pl
 import matplotlib.pyplot as plt
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple, Union
 from loguru import logger
 from sklearn.preprocessing import RobustScaler
 
@@ -69,6 +70,7 @@ from src.evaluation.fidelity.joint_fidelity import (
 from src.evaluation.fidelity.classifier_test import (
     TwoSampleClassifierTest,
     TwoSampleClassifierResults,
+    TwoSampleClassifierResultsByRange,
 )
 from src.evaluation.analysis.correlation_uncertainty import (
     CorrelationUncertaintyEstimator,
@@ -92,7 +94,7 @@ class FidelityResults:
     marginal: Optional[MarginalFidelityResults] = None
     correlation: Optional[CorrelationFidelityResults] = None
     joint: Optional[JointFidelityResults] = None
-    classifier: Optional[TwoSampleClassifierResults] = None
+    classifier: Optional[Union[TwoSampleClassifierResults, TwoSampleClassifierResultsByRange]] = None
     corr_uncertainty: Optional[CorrelationUncertaintyResults] = None
     effect_size: Optional[EffectSizeResults] = None
     sparse_peptide: Optional[SparsePeptideFidelityResults] = None
@@ -173,7 +175,9 @@ class FidelityReport:
         effect_size_continuous_metrics: Optional[List[str]] = None,
         effect_size_categorical_metrics: Optional[List[str]] = None,
         peptide_zero_threshold: Optional[float] = None,
+        peptide_zero_ranges: Optional[List[Tuple[float, float]]] = None,
         run_sparse_peptide: bool = True,
+        sparse_peptide_n_top: int = 4,
     ):
         self.categorical_columns = categorical_columns or []
         _scaler = scaler if scaler is not None else RobustScaler()
@@ -206,6 +210,7 @@ class FidelityReport:
                 classifier=classifier_type,
                 n_folds=n_classifier_folds,
                 peptide_zero_threshold=peptide_zero_threshold,
+                peptide_zero_ranges=peptide_zero_ranges,
             )
             if run_classifier
             else None
@@ -235,6 +240,7 @@ class FidelityReport:
                     if peptide_zero_threshold is not None
                     else 0.4
                 ),
+                n_top=sparse_peptide_n_top,
             )
             if run_sparse_peptide
             else None

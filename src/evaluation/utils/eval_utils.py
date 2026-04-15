@@ -84,6 +84,32 @@ def sparse_peptide_columns(
     return sparse
 
 
+def peptide_columns_in_zero_range(
+    df: pl.DataFrame, lo: float, hi: float
+) -> list[str]:
+    """Return peptide columns whose zero-value fraction in *df* falls in [lo, hi).
+
+    Parameters
+    ----------
+    df : pl.DataFrame
+        Reference DataFrame (typically the real data).
+    lo : float
+        Lower bound, inclusive.
+    hi : float
+        Upper bound, exclusive.
+    """
+    peptide_cols = get_peptide_columns(df)
+    n = len(df)
+    in_range = [
+        col for col in peptide_cols
+        if lo <= (df[col] == 0).sum() / n < hi
+    ]
+    logger.info(
+        f"Found {len(in_range)} peptide columns with zero fraction in [{lo:.2f}, {hi:.2f})"
+    )
+    return in_range
+
+
 def filer_peptide_by_zero_pecentage(
     df: pl.DataFrame, non_zero_threshold: int | float = 30.0
 ):

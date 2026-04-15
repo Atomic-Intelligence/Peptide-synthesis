@@ -9,7 +9,6 @@ from sklearn.preprocessing import RobustScaler
 
 from src.evaluation.privacy.AuthenticityEstimator import AuthenticityEstimator
 from src.evaluation.privacy.dcr import DCREstimator
-from src.evaluation.privacy.membership_inference import MembershipInferenceAttack
 from src.evaluation.privacy.reidentification_risk import ReidentificationRiskEstimator
 from src.data.utils import (
     split_peptide_columns_by_zero_percentage,
@@ -104,31 +103,7 @@ def main(cfg: DictConfig):
         logger.success("DCR estimation complete.")
 
     # ------------------------------------------------------------------ #
-    #  3. Membership Inference Attack                                      #
-    # ------------------------------------------------------------------ #
-    mia_results = None
-    mia_figure = None
-    run_mia = getattr(cfg, "run_mia", True)
-    if run_mia:
-        logger.info("Running Membership Inference Attack...")
-        mia_cfg = cfg.get("mia", {}) if hasattr(cfg, "get") else {}
-        mia = MembershipInferenceAttack(
-            scaler=RobustScaler(),
-            categorical_columns=CATEGORICAL_CLINICAL_COLUMNS + ["event_type"],
-            holdout_fraction=mia_cfg.get("holdout_fraction", 0.2)
-            if isinstance(mia_cfg, dict) else getattr(mia_cfg, "holdout_fraction", 0.2),
-            attack_signal=mia_cfg.get("attack_signal", "dcr")
-            if isinstance(mia_cfg, dict) else getattr(mia_cfg, "attack_signal", "dcr"),
-            n_folds=mia_cfg.get("n_folds", 5)
-            if isinstance(mia_cfg, dict) else getattr(mia_cfg, "n_folds", 5),
-        )
-        mia.fit(real_data)
-        mia_results = mia.estimate(synth_data)
-        mia_figure = mia.plot(mia_results)
-        logger.success("MIA complete.")
-
-    # ------------------------------------------------------------------ #
-    #  4. Re-identification Risk                                           #
+    #  3. Re-identification Risk                                           #
     # ------------------------------------------------------------------ #
     reid_results = None
     reid_figure = None
@@ -139,8 +114,8 @@ def main(cfg: DictConfig):
         reid = ReidentificationRiskEstimator(
             scaler=RobustScaler(),
             categorical_columns=CATEGORICAL_CLINICAL_COLUMNS + ["event_type"],
-            risk_threshold=reid_cfg.get("risk_threshold", 0.5)
-            if isinstance(reid_cfg, dict) else getattr(reid_cfg, "risk_threshold", 0.5),
+            risk_threshold=reid_cfg.get("risk_threshold", 2.0)
+            if isinstance(reid_cfg, dict) else getattr(reid_cfg, "risk_threshold", 2.0),
             distance_metric=reid_cfg.get("distance_metric", "euclidean")
             if isinstance(reid_cfg, dict) else getattr(reid_cfg, "distance_metric", "euclidean"),
         )
@@ -178,12 +153,6 @@ def main(cfg: DictConfig):
             mlflow.log_metrics(dcr_results.summary())
             mlflow.log_figure(dcr_figure, "dcr_results.png")
             logger.info(f"DCR summary: {dcr_results.summary()}")
-
-        # MIA
-        if mia_results is not None:
-            mlflow.log_metrics(mia_results.summary())
-            mlflow.log_figure(mia_figure, "mia_results.png")
-            logger.info(f"MIA summary: {mia_results.summary()}")
 
         # Re-identification
         if reid_results is not None:

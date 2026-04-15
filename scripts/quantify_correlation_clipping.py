@@ -313,59 +313,87 @@ def plot_summary_bar(results: list[ClippingAnalysis], save_dir: Path) -> None:
 
     fig, axes = plt.subplots(2, 2, figsize=(16, 10))
 
+    # ── helper: place label above short bars, inside tall bars ─────────────────
+    # Avoids the label floating into the subplot title area when bars reach
+    # near the top of the axis.  "tall" = bar height > 60% of the axis max.
+    def _label_bar(ax, bar, text, y_max):
+        h = bar.get_height()
+        cx = bar.get_x() + bar.get_width() / 2
+        if h > 0.60 * y_max:
+            # Place inside the bar, near the top, with contrasting white text
+            ax.text(cx, h - 0.04 * y_max, text,
+                    ha="center", va="top", fontsize=8,
+                    color="white", fontweight="bold")
+        else:
+            # Place above the bar with a small relative offset
+            ax.text(cx, h + 0.03 * y_max, text,
+                    ha="center", va="bottom", fontsize=8)
+
     # Implicit shrinkage %
     ax = axes[0, 0]
     shrinkage_pct = [(1 - r.mean_shrinkage_ratio) * 100 for r in results]
     bars = ax.bar(x, shrinkage_pct, width, color="steelblue")
+    y_max = max(shrinkage_pct, default=1.0) * 1.30 or 1.0
+    ax.set_ylim(0, y_max)
     ax.set_ylabel("Implicit shrinkage (%)")
     ax.set_title("Off-diagonal shrinkage due to clipping")
     ax.set_xticks(x)
     ax.set_xticklabels(labels, fontsize=8)
     for bar, val in zip(bars, shrinkage_pct):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
-                f"{val:.1f}%", ha="center", va="bottom", fontsize=8)
+        _label_bar(ax, bar, f"{val:.1f}%", y_max)
 
     # Relative Frobenius %
     ax = axes[0, 1]
     rel_frob = [r.relative_frobenius * 100 for r in results]
     bars = ax.bar(x, rel_frob, width, color="coral")
+    y_max = max(rel_frob, default=1.0) * 1.30 or 1.0
+    ax.set_ylim(0, y_max)
     ax.set_ylabel("Relative Frobenius norm (%)")
     ax.set_title("||C_clipped - C_raw||_F / ||C_raw||_F")
     ax.set_xticks(x)
     ax.set_xticklabels(labels, fontsize=8)
     for bar, val in zip(bars, rel_frob):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.1,
-                f"{val:.1f}%", ha="center", va="bottom", fontsize=8)
+        _label_bar(ax, bar, f"{val:.1f}%", y_max)
 
     # Number of negative eigenvalues
     ax = axes[1, 0]
     n_negs = [r.n_negative_eigs for r in results]
     bars = ax.bar(x, n_negs, width, color="mediumpurple")
+    y_max = max(n_negs, default=10) * 1.30 or 10.0
+    ax.set_ylim(0, y_max)
     ax.set_ylabel("Count")
     ax.set_title("Negative eigenvalues in raw matrix")
     ax.set_xticks(x)
     ax.set_xticklabels(labels, fontsize=8)
     for bar, val in zip(bars, n_negs):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
-                str(val), ha="center", va="bottom", fontsize=8)
+        _label_bar(ax, bar, str(val), y_max)
 
     # Marchenko-Pastur: signal vs noise eigenvalue counts (stacked bar)
     ax = axes[1, 1]
     n_signal = [r.n_signal_eigs for r in results]
     n_noise  = [r.n_noise_eigs  for r in results]
+    n_total  = [s + n for s, n in zip(n_signal, n_noise)]
     bars_sig   = ax.bar(x, n_signal, width, color="seagreen",   label="Signal (> λ+)")
     bars_noise = ax.bar(x, n_noise,  width, bottom=n_signal,
                         color="lightgray", label="Noise / bulk (≤ λ+)")
-    # annotate MP λ+ value and signal count
-    for bar, ns, q_val in zip(bars_sig, n_signal,
-                               [r.n_features / r.n_samples for r in results]):
-        lp = (1 + np.sqrt(q_val)) ** 2
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() / 2,
-                f"{ns}", ha="center", va="center", fontsize=8, color="white",
-                fontweight="bold")
-        ax.text(bar.get_x() + bar.get_width() / 2,
-                bar.get_height() + 1,
-                f"λ+={lp:.2f}", ha="center", va="bottom", fontsize=7, color="darkgreen")
+    y_max_mp = max(n_total, default=100) * 1.12
+    ax.set_ylim(0, y_max_mp)
+    # Annotate signal count (inside green bar) and λ+ (above full stacked bar)
+    for bar_s, bar_n, ns, q_val in zip(
+        bars_sig, bars_noise, n_signal,
+        [r.n_features / r.n_samples for r in results]
+    ):
+        lp = (1.0 + np.sqrt(q_val)) ** 2
+        cx = bar_s.get_x() + bar_s.get_width() / 2
+        # Signal count inside green portion
+        ax.text(cx, bar_s.get_height() / 2,
+                f"{ns}", ha="center", va="center", fontsize=8,
+                color="white", fontweight="bold")
+        # λ+ label above the full stacked bar (noise top)
+        full_top = bar_s.get_height() + bar_n.get_height()
+        ax.text(cx, full_top + 0.015 * y_max_mp,
+                f"λ+={lp:.2f}", ha="center", va="bottom",
+                fontsize=7, color="darkgreen")
     ax.set_ylabel("Number of eigenvalues")
     ax.set_title("Marchenko-Pastur signal vs noise decomposition")
     ax.set_xticks(x)
@@ -418,14 +446,19 @@ def run(
         f"(dropped cols with >{zero_frac*100:.0f}% zeros)"
     )
 
-    # Build list of (label, sub-dataframe) pairs
-    subsets: list[tuple[str, pl.DataFrame]] = [("all", df)]
+    # Build list of (label, sub-dataframe) pairs.
+    # When event types are specified, analyse only those subsets (not the
+    # aggregated "all" group) since the per-event breakdown is what matters.
+    subsets: list[tuple[str, pl.DataFrame]] = []
     if event_column and event_types:
         for et in event_types:
             sub = df.filter(pl.col(event_column) == et)
             if len(sub) > 10:
                 subsets.append((et, sub))
                 print(f"  Event '{et}': {len(sub)} rows")
+    # Fall back to the full dataset only when no event filter is provided.
+    if not subsets:
+        subsets = [("all", df)]
 
     all_results: list[ClippingAnalysis] = []
 

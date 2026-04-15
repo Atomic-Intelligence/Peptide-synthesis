@@ -147,17 +147,15 @@ class SyntheticDataEvaluator:
 
     Privacy flags
     ~~~~~~~~~~~~~
-    run_dcr, run_authenticity, run_mia, run_reidentification : bool
+    run_dcr, run_authenticity, run_reidentification : bool
         Toggle individual privacy sub-metrics.
     holdout_fraction : float
-        Fraction of real data held out for DCR baseline / MIA non-members.
+        Fraction of real data held out for DCR baseline.
     par_percentile : float
         Percentile threshold for privacy-at-risk (DCR).
     authenticity_threshold : float
-    mia_holdout_fraction : float
-    mia_attack_signal : "dcr" | "likelihood" | "both"
-    mia_n_folds : int
     reid_risk_threshold : float
+        Gap-ratio threshold for re-identification risk (default 2.0).
     dcr_distance_metric / reid_distance_metric : "euclidean" | "gower"
     """
 
@@ -175,6 +173,7 @@ class SyntheticDataEvaluator:
         run_corr_uncertainty: bool = True,
         run_effect_size: bool = True,
         run_sparse_peptide: bool = True,
+        sparse_peptide_n_top: int = 4,
         corr_method: Literal["spearman", "pearson"] = "spearman",
         max_correlation_cols: int = 60,
         n_bootstrap: int = 1000,
@@ -186,21 +185,32 @@ class SyntheticDataEvaluator:
         effect_size_continuous_metrics: Optional[List[str]] = None,
         effect_size_categorical_metrics: Optional[List[str]] = None,
         peptide_zero_threshold: Optional[float] = None,
+        peptide_zero_ranges: Optional[List[tuple]] = None,
         # ── privacy toggles ───────────────────────────────────────────────
         run_privacy: bool = True,
         run_dcr: bool = True,
         run_authenticity: bool = True,
-        run_mia: bool = True,
         run_reidentification: bool = True,
         holdout_fraction: float = 0.5,
         par_percentile: float = 5.0,
         authenticity_threshold: float = 1.0,
-        mia_holdout_fraction: float = 0.2,
-        mia_attack_signal: Literal["dcr", "likelihood", "both"] = "dcr",
-        mia_n_folds: int = 5,
-        reid_risk_threshold: float = 0.5,
+        reid_risk_threshold: float = 2.0,
         dcr_distance_metric: Literal["euclidean", "gower"] = "euclidean",
         reid_distance_metric: Literal["euclidean", "gower"] = "euclidean",
+        run_singling_out: bool = True,
+        run_linkability: bool = True,
+        run_attribute_inference: bool = True,
+        n_anonymeter_attacks: int = 2000,
+        anonymeter_n_jobs: int = -1,
+        gap_ratio_threshold: float = 2.0,
+        inference_tolerance: float = 0.1,
+        run_membership_inference: bool = True,
+        linkability_aux_cols: Optional[List] = None,
+        inference_target_cols: Optional[List[str]] = None,
+        mia_attack_signal: str = "dcr",
+        mia_classifier: str = "logistic_regression",
+        mia_n_folds: int = 5,
+        mia_high_risk_threshold: float = 0.9,
     ):
         self.categorical_columns = categorical_columns
         self.scaler = scaler or RobustScaler()
@@ -218,6 +228,7 @@ class SyntheticDataEvaluator:
             run_corr_uncertainty=run_corr_uncertainty,
             run_effect_size=run_effect_size,
             run_sparse_peptide=run_sparse_peptide,
+            sparse_peptide_n_top=sparse_peptide_n_top,
             corr_method=corr_method,
             n_bootstrap=n_bootstrap,
             n_classifier_folds=n_classifier_folds,
@@ -227,6 +238,7 @@ class SyntheticDataEvaluator:
             effect_size_continuous_metrics=effect_size_continuous_metrics,
             effect_size_categorical_metrics=effect_size_categorical_metrics,
             peptide_zero_threshold=peptide_zero_threshold,
+            peptide_zero_ranges=[tuple(r) for r in peptide_zero_ranges] if peptide_zero_ranges else None,
         )
 
         # Privacy
@@ -239,15 +251,25 @@ class SyntheticDataEvaluator:
             run_dcr=run_dcr,
             run_authenticity=run_authenticity,
             authenticity_threshold=authenticity_threshold,
-            run_mia=run_mia,
-            mia_holdout_fraction=mia_holdout_fraction,
-            mia_attack_signal=mia_attack_signal,
-            mia_n_folds=mia_n_folds,
             run_reidentification=run_reidentification,
             reid_risk_threshold=reid_risk_threshold,
             dcr_distance_metric=dcr_distance_metric,
             reid_distance_metric=reid_distance_metric,
             peptide_zero_threshold=peptide_zero_threshold,
+            run_singling_out=run_singling_out,
+            run_linkability=run_linkability,
+            run_attribute_inference=run_attribute_inference,
+            n_anonymeter_attacks=n_anonymeter_attacks,
+            anonymeter_n_jobs=anonymeter_n_jobs,
+            gap_ratio_threshold=gap_ratio_threshold,
+            inference_tolerance=inference_tolerance,
+            run_membership_inference=run_membership_inference,
+            linkability_aux_cols=tuple(linkability_aux_cols) if linkability_aux_cols else None,
+            inference_target_cols=inference_target_cols,
+            mia_attack_signal=mia_attack_signal,
+            mia_classifier=mia_classifier,
+            mia_n_folds=mia_n_folds,
+            mia_high_risk_threshold=mia_high_risk_threshold,
         )
 
     # ------------------------------------------------------------------
@@ -538,6 +560,7 @@ def main(cfg: DictConfig) -> None:
         run_corr_uncertainty=fid.run_corr_uncertainty,
         run_effect_size=fid.run_effect_size,
         run_sparse_peptide=fid.get("run_sparse_peptide", True),
+        sparse_peptide_n_top=fid.get("sparse_peptide_n_top", 4),
         corr_method=fid.corr_method,
         max_correlation_cols=fid.max_correlation_cols,
         n_bootstrap=fid.n_bootstrap,
@@ -547,21 +570,40 @@ def main(cfg: DictConfig) -> None:
         effect_size_continuous_metrics=eff_cont,
         effect_size_categorical_metrics=eff_cat,
         peptide_zero_threshold=fid.get("peptide_zero_threshold", None),
+        peptide_zero_ranges=fid.get("peptide_zero_ranges", None),
         # privacy
         run_privacy=cfg.run_privacy,
         run_dcr=priv.run_dcr,
         run_authenticity=priv.run_authenticity,
-        run_mia=priv.run_mia,
         run_reidentification=priv.run_reidentification,
         holdout_fraction=priv.holdout_fraction,
         par_percentile=priv.par_percentile,
         authenticity_threshold=priv.authenticity_threshold,
-        mia_holdout_fraction=priv.mia_holdout_fraction,
-        mia_attack_signal=priv.mia_attack_signal,
-        mia_n_folds=priv.mia_n_folds,
         reid_risk_threshold=priv.reid_risk_threshold,
         dcr_distance_metric=priv.dcr_distance_metric,
         reid_distance_metric=priv.reid_distance_metric,
+        run_singling_out=priv.get("run_singling_out", True),
+        run_linkability=priv.get("run_linkability", True),
+        run_attribute_inference=priv.get("run_attribute_inference", True),
+        n_anonymeter_attacks=priv.get("n_anonymeter_attacks", 2000),
+        anonymeter_n_jobs=priv.get("anonymeter_n_jobs", -1),
+        gap_ratio_threshold=priv.get("gap_ratio_threshold", 2.0),
+        inference_tolerance=priv.get("inference_tolerance", 0.1),
+        run_membership_inference=priv.get("run_membership_inference", True),
+        linkability_aux_cols=(
+            OmegaConf.to_container(priv.linkability_aux_cols, resolve=True)
+            if priv.get("linkability_aux_cols")
+            else None
+        ),
+        inference_target_cols=(
+            OmegaConf.to_container(priv.inference_target_cols, resolve=True)
+            if priv.get("inference_target_cols")
+            else None
+        ),
+        mia_attack_signal=priv.get("mia_attack_signal", "dcr"),
+        mia_classifier=priv.get("mia_classifier", "logistic_regression"),
+        mia_n_folds=priv.get("mia_n_folds", 5),
+        mia_high_risk_threshold=priv.get("mia_high_risk_threshold", 0.9),
     )
 
     # ── per-event config ──────────────────────────────────────────────────

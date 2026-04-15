@@ -51,7 +51,6 @@ def train_model(
         .split_event_control(event=cfg.event)
         .get_processed_data()
     )[0]
-
     imputation_data = data_processor.get_data_for_imputation()[0]
     logger.info(f"Imputation data shape: {imputation_data.shape}")
 
@@ -170,7 +169,9 @@ def run_evaluation(
     if _str_cols:
         logger.info(f"Dropping string columns before evaluation: {_str_cols}")
         real_df = real_df.drop(_str_cols)
-        synthetic_df = synthetic_df.drop([c for c in _str_cols if c in synthetic_df.columns])
+        synthetic_df = synthetic_df.drop(
+            [c for c in _str_cols if c in synthetic_df.columns]
+        )
 
     logger.info("Running fidelity evaluation...")
     fidelity_report = FidelityReport()
@@ -192,9 +193,7 @@ def run_evaluation(
     if model is not None:
         try:
             experiment_id, training_run_id = model.get_or_create_run(model.ml_flow_info)
-            with mlflow.start_run(
-                experiment_id=experiment_id, run_id=training_run_id
-            ):
+            with mlflow.start_run(experiment_id=experiment_id, run_id=training_run_id):
                 with mlflow.start_run(
                     experiment_id=experiment_id,
                     run_name="evaluation",
@@ -252,7 +251,9 @@ def main(cfg: DictConfig):
                 "run_evaluation requires synthetic data. Enable run_inference or "
                 "set run_inference: true before run_evaluation: true."
             )
-        run_evaluation(cfg=cfg, real_df=real_df, synthetic_df=synthetic_data, model=model)
+        run_evaluation(
+            cfg=cfg, real_df=real_df, synthetic_df=synthetic_data, model=model
+        )
 
     input("Press Enter to shut down the experiment viewing app...")
     shutdown_hook()

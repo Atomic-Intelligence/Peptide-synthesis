@@ -16,8 +16,8 @@ experiment_name: restart
 
 run_name: all_events
 
-sampled_patients_num: 300
-non_zero_threshold: 40
+sampled_patients_num: 2000
+non_zero_threshold: 30
 ml_flow_tracking_uri: http://10.100.111.210:5004
 primary_key: ${data_processor.id_column}
 

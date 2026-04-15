@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import math
 import re
 from pathlib import Path
 
@@ -125,13 +126,16 @@ def run(
     # ── plotting ─────────────────────────────────────────────────────────
     def _plot_group(group_df: pl.DataFrame, title: str, filename: str):
         n = len(group_df)
-        fig, axes = plt.subplots(1, n, figsize=(5 * n, 4), squeeze=False)
-        axes = axes[0]
+        n_cols = 2
+        n_rows = math.ceil(n / n_cols)
+        fig, axes = plt.subplots(
+            n_rows, n_cols, figsize=(9 * n_cols, 6 * n_rows), squeeze=False
+        )
         for i, row in enumerate(
             tqdm(list(group_df.iter_rows(named=True)), desc=f"Plotting {title[:30]}")
         ):
             col = row["column"]
-            ax = axes[i]
+            ax = axes[i // n_cols][i % n_cols]
             real_v = real_df[col].to_numpy().astype(float)
             synth_v = synth_df[col].to_numpy().astype(float)
             lo = min(real_v.min(), synth_v.min())
@@ -148,7 +152,7 @@ def run(
                 color="darkorange",
                 label="Real",
                 edgecolor="white",
-                linewidth=0.3,
+                linewidth=0.4,
             )
             ax.hist(
                 synth_v,
@@ -158,21 +162,27 @@ def run(
                 color="steelblue",
                 label="Synthetic",
                 edgecolor="white",
-                linewidth=0.3,
+                linewidth=0.4,
             )
 
             ax.set_title(
                 f"{col}\n"
                 f"KS={row['ks_statistic']:.3f}  p={row['ks_pvalue']:.2e}\n"
                 f"zero%: real={row['real_zero_pct']:.1%}  synth={row['synth_zero_pct']:.1%}",
-                fontsize=9,
+                fontsize=11,
             )
+            ax.set_xlabel("Value", fontsize=10)
+            ax.set_ylabel("Density", fontsize=10)
             if log_scale:
                 ax.set_yscale("log")
-            ax.legend(fontsize=8)
-            ax.tick_params(labelsize=8)
+            ax.legend(fontsize=10)
+            ax.tick_params(labelsize=10)
 
-        fig.suptitle(title, fontsize=13, fontweight="bold", y=1.02)
+        # hide any unused axes in the last row
+        for j in range(n, n_rows * n_cols):
+            axes[j // n_cols][j % n_cols].set_visible(False)
+
+        fig.suptitle(title, fontsize=15, fontweight="bold", y=1.01)
         fig.tight_layout()
         fig.savefig(str(out / filename), dpi=150, bbox_inches="tight")
         plt.close(fig)

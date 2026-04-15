@@ -9,13 +9,15 @@ import mlflow.artifacts
 import numpy as np
 import pandas as pd
 import polars as pl
-from arfpy import arf
-from loguru import logger
+from src.models.AdversarialRandomForests import arf
 from omegaconf import DictConfig
+
+from src.logger import setup_logger
 from sklearn.preprocessing import (
     StandardScaler,
     QuantileTransformer,
     RobustScaler,
+    PowerTransformer,
     OneHotEncoder,
 )
 
@@ -31,19 +33,20 @@ from src.models.synthetization_model_interface import (
     DatasetMetadata,
 )
 
+logger = setup_logger()
 
-Scaler = Union[StandardScaler, RobustScaler, QuantileTransformer]
+Scaler = Union[StandardScaler, RobustScaler, QuantileTransformer, PowerTransformer]
 
 
 class ARFPipeline(SynthetizationModelInterface):
     def __init__(
         self,
-        run_info: MlFlowTrainingRunInfo,
+        ml_flow_info: MlFlowTrainingRunInfo,
         arf_params: DictConfig,
         scaler: Scaler,
         description: Optional[dict[str, any]] = None,
     ):
-        super().__init__(ml_flow_info=run_info, description=description)
+        super().__init__(ml_flow_info=ml_flow_info, description=description)
         self.scaler = scaler
         self.oh_encoder = OneHotEncoder(sparse_output=False)
         self.model_factory = partial(
@@ -60,13 +63,11 @@ class ARFPipeline(SynthetizationModelInterface):
         dataset_metadata: Optional[DatasetMetadata] = None,
     ):
         logger.info("Starting ARF model fitting...")
-        data = data.fill_null(0.0).fill_nan(0.0)
 
         # Derive column groups from what is actually present in the data.
         # The pipeline already handles event filtering and drops the primary key,
         # so we just need to partition the remaining columns correctly.
         peptide_cols = get_peptide_columns(data)
-
         self.numerical_columns = peptide_cols + [
             col
             for col in NUMERICAL_CLINICAL_COLUMNS + TIME_TO_EVENT_COLUMNS
@@ -78,10 +79,14 @@ class ARFPipeline(SynthetizationModelInterface):
             if col in data.columns
         ]
 
-        numerical_data = data.select(self.numerical_columns).to_numpy()
+        # Apply fill_null/fill_nan only to numerical columns — string/categorical
+        # columns cannot be filled with a float value and will raise a SchemaError.
+        numerical_data = (
+            data.select(self.numerical_columns).fill_null(0.0).fill_nan(0.0).to_numpy()
+        )
         categorical_data = data.select(self.categorical_columns).to_numpy()
-
         numerical_features = self.scaler.fit_transform(numerical_data)
+
         categorical_features = self.oh_encoder.fit_transform(categorical_data)
 
         self.numerical_feature_names = self.scaler.get_feature_names_out().tolist()
@@ -89,7 +94,7 @@ class ARFPipeline(SynthetizationModelInterface):
             self.oh_encoder.get_feature_names_out().tolist()
         )
 
-        # arfpy requires a pandas DataFrame
+        # arf requires a pandas DataFrame
         arf_input = pd.DataFrame(
             np.concatenate([numerical_features, categorical_features], axis=-1),
             columns=self.numerical_feature_names + self.categorical_feature_names,
@@ -102,10 +107,10 @@ class ARFPipeline(SynthetizationModelInterface):
         stats = self.model.forde()
         logger.success(f"Density estimation complete!\n{stats}")
 
-    def _generate(self, n: int) -> pl.DataFrame:
+    def _generate(self, n_synthetic_patients: int) -> pl.DataFrame:
         assert self.model is not None, "Model has not been fitted. Call .fit() first."
 
-        raw_synthetic = self.model.forge(n=n)
+        raw_synthetic = self.model.forge(n=n_synthetic_patients)
 
         numerical_data = self.scaler.inverse_transform(
             raw_synthetic[self.numerical_feature_names].to_numpy()

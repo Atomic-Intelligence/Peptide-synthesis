@@ -14,7 +14,7 @@ max_corr_uncertainty_cols: 30 # separate (smaller) cap for the bootstrap module
 
 # Two-sample classifier test
 n_classifier_folds: 5
-classifier_type: random_forest  # random_forest | logistic_regression | gradient_boosted
+classifier_type: logistic_regression  # random_forest | logistic_regression | gradient_boosted
 
 # ---------------------------------------------------------------------------
 # Effect size metrics (per-column magnitude of distribution shift)

@@ -23,6 +23,10 @@ overlap_coef
 normalized_wasserstein
     Wasserstein-1 distance divided by the real IQR — makes Wasserstein
     comparable across columns with different scales.
+mann_whitney_p
+    Two-sided Mann-Whitney U test p-value.  Tests whether real and synthetic
+    distributions are drawn from the same population.  Range [0, 1]; values
+    near 0 indicate a statistically significant distributional shift.
 
 Categorical columns
 -------------------
@@ -54,6 +58,7 @@ CONTINUOUS_METRICS: frozenset[str] = frozenset(
         "cles",
         "overlap_coef",
         "normalized_wasserstein",
+        "mann_whitney_p",
     ]
 )
 
@@ -71,6 +76,7 @@ DEFAULT_CONTINUOUS: List[str] = [
     "cles",
     "overlap_coef",
     "normalized_wasserstein",
+    "mann_whitney_p",
 ]
 
 DEFAULT_CATEGORICAL: List[str] = [
@@ -134,6 +140,18 @@ def _cles(a: np.ndarray, b: np.ndarray) -> float:
     # mannwhitneyu(..., alternative='greater') gives U = # pairs where b > a
     u_stat, _ = mannwhitneyu(b, a, alternative="greater")
     return float(u_stat / (n_a * n_b))
+
+
+def _mann_whitney_p(a: np.ndarray, b: np.ndarray) -> float:
+    """Two-sided Mann-Whitney U test p-value.
+
+    Tests whether the two distributions are drawn from the same population.
+    Range [0, 1]; small values indicate a statistically significant shift.
+    """
+    if len(a) == 0 or len(b) == 0:
+        return 1.0
+    _, p = mannwhitneyu(b, a, alternative="two-sided")
+    return float(p)
 
 
 def _overlap_coef(a: np.ndarray, b: np.ndarray, bins: int = 50) -> float:
@@ -236,6 +254,7 @@ class ColumnEffectSizeResult:
     cles: Optional[float] = None
     overlap_coef: Optional[float] = None
     normalized_wasserstein: Optional[float] = None
+    mann_whitney_p: Optional[float] = None
 
     # Categorical
     hellinger: Optional[float] = None
@@ -261,6 +280,7 @@ class EffectSizeResults:
     mean_cles: Optional[float] = None
     mean_overlap_coef: Optional[float] = None
     mean_normalized_wasserstein: Optional[float] = None
+    mean_mann_whitney_p: Optional[float] = None
     mean_hellinger: Optional[float] = None
     mean_js_divergence: Optional[float] = None
 
@@ -299,6 +319,7 @@ class EffectSizeResults:
                     "cles": r.cles,
                     "overlap_coef": r.overlap_coef,
                     "normalized_wasserstein": r.normalized_wasserstein,
+                    "mann_whitney_p": r.mann_whitney_p,
                     "hellinger": r.hellinger,
                     "js_divergence": r.js_divergence,
                 }
@@ -315,6 +336,7 @@ class EffectSizeResults:
             "cles": pl.Float64,
             "overlap_coef": pl.Float64,
             "normalized_wasserstein": pl.Float64,
+            "mann_whitney_p": pl.Float64,
             "hellinger": pl.Float64,
             "js_divergence": pl.Float64,
         }
@@ -442,6 +464,8 @@ class EffectSizeEstimator:
                         val = _overlap_coef(a, b)
                     elif metric == "normalized_wasserstein":
                         val = _normalized_wasserstein(a, b)
+                    elif metric == "mann_whitney_p":
+                        val = _mann_whitney_p(a, b)
                     else:
                         continue
                     setattr(result, metric, val)

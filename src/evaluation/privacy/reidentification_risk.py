@@ -1,31 +1,47 @@
-"""Re-identification Risk privacy metric.
+"""Re-identification Risk — linkage-based attack on synthetic tabular data.
 
-For each synthetic record, re-identification risk measures how confidently an
-adversary could link that record back to a *specific* real individual.
+Attack framing
+--------------
+Given D_real (real records used for training) and D_syn (synthetic data
+released as a privacy-safe substitute), an attacker who knows a real
+individual's quasi-identifiers searches D_syn for the nearest matching
+synthetic record.  If the generator memorised that individual, a near-exact
+copy will appear in D_syn.
 
-Approach
---------
-For every synthetic record we find its two nearest neighbours in the real
-dataset.  If the nearest neighbour is much closer than the second nearest, the
-synthetic record effectively "points to" a unique real individual — an
-adversary could re-identify that person with high confidence.
+This is the correct privacy threat model for a synthetic-data release:
+membership is 100% by definition (every record in D_real was used for
+training), so the question is not *whether* a person was in the training set
+but *whether an attacker can find their record in the synthetic output and
+read off their sensitive attributes*.
 
-We quantify this via the **distance ratio**:
+Attack mechanics (composition of linkage + attribute inference)
+---------------------------------------------------------------
+1. **Linkage** — for each real record, find its 1st and 2nd nearest
+   neighbours in D_syn (real → synthetic search direction).
+2. **Gap scoring** — ``gap = d(2nd-NN_synth) / d(1st-NN_synth)``.
+   A large gap means one synthetic record unambiguously matches this real
+   individual and nothing else is close — the attacker can confidently link
+   the person to a synthetic row and read off their sensitive columns.
+   A gap near 1 means many synthetic records are equidistant — no confident
+   link is possible.
+3. **Attribution** — with a high-confidence link, the attacker reads
+   sensitive columns from the matched synthetic row.  This step is implicit
+   here; the per-record gap scores flag which individuals are most exposed.
 
-    ratio = d(synth, 1st-NN) / d(synth, 2nd-NN)
-
-A ratio close to 0 means the closest real record is *much* closer than the
-runner-up — high re-identification risk.  A ratio close to 1 means the two
-nearest real records are roughly equidistant — low risk.
+The per-record gap scores are the primary output of a privacy audit: they
+identify real records that the generator memorised too faithfully — outliers,
+people with rare attribute combinations, and edge cases the model latched
+onto.
 
 Key metrics
 -----------
-- ``mean_distance_ratio``   : mean of the per-record distance ratios
-- ``median_distance_ratio`` : median of the per-record distance ratios
-- ``reidentification_rate`` : fraction of synthetic records whose distance
-                              ratio falls below a configurable threshold
-                              (default 0.5), indicating high re-identification
-                              risk
+- ``mean_gap_ratio``        : mean gap across all real records
+- ``median_gap_ratio``      : median gap
+- ``reidentification_rate`` : fraction of real records with gap > ``risk_threshold``
+                              (default 2.0 — the 2nd nearest synthetic record is
+                              at least twice as far as the nearest one, indicating
+                              an unambiguous match)
+- ``num_at_risk``           : count of high-risk real records
 """
 
 from __future__ import annotations
@@ -46,28 +62,33 @@ from src.evaluation.privacy.gower_distance import GowerDistanceCalculator
 class ReidentificationResults(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    # Per-record arrays
-    distance_ratios: np.ndarray         # d(1st-NN) / d(2nd-NN) per synthetic record
-    nearest_distances: np.ndarray       # d(synth, 1st-NN)
-    second_nearest_distances: np.ndarray  # d(synth, 2nd-NN)
+    # Per-record arrays (indexed over real records)
+    gap_ratios: np.ndarray                      # d(2nd-NN_synth) / d(1st-NN_synth) per real record
+    nearest_synth_distances: np.ndarray         # d(real, 1st-NN_synth)
+    second_nearest_synth_distances: np.ndarray  # d(real, 2nd-NN_synth)
 
     # Scalar summaries
-    mean_distance_ratio: float
-    median_distance_ratio: float
-    reidentification_rate: float        # fraction below threshold
-    num_at_risk: int                    # count below threshold
+    mean_gap_ratio: float
+    median_gap_ratio: float
+    reidentification_rate: float                # fraction with gap > risk_threshold
+    num_at_risk: int
 
     def summary(self) -> dict:
         return {
-            "mean_distance_ratio": self.mean_distance_ratio,
-            "median_distance_ratio": self.median_distance_ratio,
+            "mean_gap_ratio": self.mean_gap_ratio,
+            "median_gap_ratio": self.median_gap_ratio,
             "reidentification_rate": self.reidentification_rate,
             "num_at_risk": self.num_at_risk,
         }
 
 
 class ReidentificationRiskEstimator:
-    """Estimate re-identification risk of synthetic records.
+    """Estimate per-record re-identification risk via D_syn linkage.
+
+    For each real record, the attacker searches D_syn for the nearest synthetic
+    match.  The gap ratio ``d(2nd-NN_synth) / d(1st-NN_synth)`` measures how
+    unambiguous that match is: a large gap means a single synthetic record
+    stands out as a clear copy of the real individual.
 
     Parameters
     ----------
@@ -76,9 +97,10 @@ class ReidentificationRiskEstimator:
     categorical_columns :
         Column names that should be one-hot encoded rather than scaled.
     risk_threshold :
-        Distance-ratio threshold below which a synthetic record is considered
-        at risk of re-identification.  Default 0.5 (the nearest real record is
-        at least twice as close as the second nearest).
+        Gap-ratio threshold above which a real record is considered at risk.
+        ``gap = d(2nd-NN_synth) / d(1st-NN_synth)``.  Default 2.0 — the 2nd
+        nearest synthetic record is at least twice as far as the closest one,
+        indicating an unambiguous synthetic match.
     algorithm :
         NearestNeighbors algorithm.  ``"ball_tree"`` is the default.
         Ignored when ``distance_metric="gower"``.
@@ -93,7 +115,7 @@ class ReidentificationRiskEstimator:
         self,
         scaler: Optional[Scaler] = None,
         categorical_columns: Optional[List[str]] = None,
-        risk_threshold: float = 0.5,
+        risk_threshold: float = 2.0,
         algorithm: str = "ball_tree",
         distance_metric: str = "euclidean",
         fitted_feature_processor: Optional["FeatureProcessor"] = None,
@@ -120,14 +142,13 @@ class ReidentificationRiskEstimator:
 
         self._real_data: Optional[np.ndarray] = None
         self._real_df: Optional[pl.DataFrame] = None
-        self._knn: Optional[NearestNeighbors] = None
 
     # ------------------------------------------------------------------
     # Fitting
     # ------------------------------------------------------------------
 
     def fit(self, real_dataframe: pl.DataFrame) -> "ReidentificationRiskEstimator":
-        """Fit on the full real dataset (reference for re-identification)."""
+        """Store and preprocess the real dataset (query set for the attack)."""
         self._real_df = real_dataframe
 
         if self.distance_metric == "gower":
@@ -137,9 +158,6 @@ class ReidentificationRiskEstimator:
                 self._real_data = self.feature_processor.transform(real_dataframe)
             else:
                 self._real_data = self.feature_processor.fit_transform(real_dataframe)
-
-            self._knn = NearestNeighbors(n_neighbors=2, algorithm=self.algorithm)
-            self._knn.fit(self._real_data)
 
         logger.info(
             f"ReidentificationRiskEstimator fitted ({self.distance_metric}): "
@@ -152,51 +170,65 @@ class ReidentificationRiskEstimator:
     # ------------------------------------------------------------------
 
     def estimate(self, synthetic_dataframe: pl.DataFrame) -> ReidentificationResults:
-        """Compute re-identification risk for each synthetic record."""
+        """Compute per-record re-identification risk for every real record.
+
+        For each real record, finds its two nearest neighbours in D_syn
+        (real → synth direction) and computes
+        ``gap = d(2nd-NN_synth) / d(1st-NN_synth)``.  A large gap signals an
+        unambiguous synthetic match — high re-identification risk.
+
+        Edge cases:
+        - ``d1 = 0`` (perfect copy in D_syn) → gap capped at 100 → maximum risk
+        - ``d1 = 0`` and ``d2 = 0`` → gap set to 1.0 → treated as low risk
+          (the whole synthetic distribution collapsed here)
+        """
         if self.distance_metric == "gower":
             if not self._gower.fitted:
                 raise RuntimeError("Call fit() before estimate().")
 
             distances, _ = self._gower.nearest_neighbor_distances(
-                synthetic_dataframe, self._real_df, n_neighbors=2,
+                df_query=self._real_df,
+                df_reference=synthetic_dataframe,
+                n_neighbors=2,
             )
         else:
-            if self._knn is None:
+            if self._real_data is None:
                 raise RuntimeError("Call fit() before estimate().")
 
             synth_array = self.feature_processor.transform(synthetic_dataframe)
-            distances, _ = self._knn.kneighbors(synth_array, n_neighbors=2)
+            knn = NearestNeighbors(n_neighbors=2, algorithm=self.algorithm)
+            knn.fit(synth_array)
+            distances, _ = knn.kneighbors(self._real_data, n_neighbors=2)
 
         nearest = distances[:, 0]
         second_nearest = distances[:, 1]
 
-        # Avoid division by zero: if 2nd-NN distance is 0, ratio = 1.0
-        # (both records are equidistant at 0 — no unique linkage)
+        # gap = d2 / d1 — large gap means unambiguous match (high risk)
         with np.errstate(divide="ignore", invalid="ignore"):
-            ratios = np.where(
-                second_nearest > 0,
-                nearest / second_nearest,
-                np.where(nearest == 0, 1.0, 0.0),
+            gaps = np.where(
+                nearest > 0,
+                second_nearest / nearest,
+                np.where(second_nearest > 0, 100.0, 1.0),
             )
 
-        at_risk_mask = ratios < self.risk_threshold
+        at_risk_mask = gaps > self.risk_threshold
         reid_rate = float(at_risk_mask.mean())
-
-        mean_ratio = float(np.mean(ratios))
-        median_ratio = float(np.median(ratios))
+        mean_gap = float(np.mean(gaps))
+        median_gap = float(np.median(gaps))
 
         logger.info(
-            f"Re-identification risk — mean ratio: {mean_ratio:.4f}, "
-            f"median ratio: {median_ratio:.4f}, "
-            f"re-identification rate (threshold={self.risk_threshold}): {reid_rate:.2%}"
+            f"Re-identification risk — mean gap: {mean_gap:.4f}, "
+            f"median gap: {median_gap:.4f}, "
+            f"re-identification rate (gap > {self.risk_threshold}): {reid_rate:.2%}, "
+            f"num at risk: {int(at_risk_mask.sum())}"
         )
 
         return ReidentificationResults(
-            distance_ratios=ratios,
-            nearest_distances=nearest,
-            second_nearest_distances=second_nearest,
-            mean_distance_ratio=mean_ratio,
-            median_distance_ratio=median_ratio,
+            gap_ratios=gaps,
+            nearest_synth_distances=nearest,
+            second_nearest_synth_distances=second_nearest,
+            mean_gap_ratio=mean_gap,
+            median_gap_ratio=median_gap,
             reidentification_rate=reid_rate,
             num_at_risk=int(at_risk_mask.sum()),
         )
@@ -210,48 +242,50 @@ class ReidentificationRiskEstimator:
         results: ReidentificationResults,
         save_path: Optional[str] = None,
     ) -> plt.Figure:
-        """Distance-ratio histogram and nearest-vs-second-nearest scatter."""
+        """Gap-ratio histogram and nearest-vs-second-nearest synthetic distance scatter."""
         fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
-        # --- Ratio histogram ---
+        # --- Gap ratio histogram ---
         ax = axes[0]
-        ax.hist(results.distance_ratios, bins=50, color="steelblue", alpha=0.7,
-                edgecolor="white")
-        ax.axvline(self.risk_threshold, color="red", linestyle="--",
-                   label=f"Threshold ({self.risk_threshold})")
-        ax.set_xlabel("Distance ratio (1st-NN / 2nd-NN)")
-        ax.set_ylabel("Count")
-        ax.set_title("Re-identification Risk — Distance Ratios")
+        ax.hist(results.gap_ratios, bins=50, color="steelblue", alpha=0.7, edgecolor="white")
+        ax.axvline(
+            self.risk_threshold, color="red", linestyle="--",
+            label=f"Threshold ({self.risk_threshold})",
+        )
+        ax.set_xlabel("Gap ratio  d(2nd-NN_synth) / d(1st-NN_synth)")
+        ax.set_ylabel("Count (real records)")
+        ax.set_title("Re-identification Risk — Gap Ratios")
         ax.legend(fontsize=8)
 
-        # --- Scatter: nearest vs second-nearest ---
+        # --- Scatter: nearest vs second-nearest synth distance ---
         ax = axes[1]
-        at_risk = results.distance_ratios < self.risk_threshold
+        at_risk = results.gap_ratios > self.risk_threshold
         ax.scatter(
-            results.nearest_distances[~at_risk],
-            results.second_nearest_distances[~at_risk],
+            results.nearest_synth_distances[~at_risk],
+            results.second_nearest_synth_distances[~at_risk],
             alpha=0.3, s=8, color="steelblue", label="Low risk",
         )
         ax.scatter(
-            results.nearest_distances[at_risk],
-            results.second_nearest_distances[at_risk],
+            results.nearest_synth_distances[at_risk],
+            results.second_nearest_synth_distances[at_risk],
             alpha=0.5, s=12, color="red", label="At risk",
         )
-        # Plot the threshold line (ratio = threshold → y = x / threshold)
+        # Threshold line: gap = threshold → d2 = threshold * d1
         max_val = max(
-            results.nearest_distances.max(),
-            results.second_nearest_distances.max(),
+            float(results.nearest_synth_distances.max()),
+            float(results.second_nearest_synth_distances.max()),
         )
         xs = np.linspace(0, max_val, 100)
-        ax.plot(xs, xs / self.risk_threshold, "r--", alpha=0.4, linewidth=0.8)
-        ax.set_xlabel("Distance to 1st-NN (real)")
-        ax.set_ylabel("Distance to 2nd-NN (real)")
-        ax.set_title("Nearest vs. Second-Nearest Distance")
+        ax.plot(xs, self.risk_threshold * xs, "r--", alpha=0.4, linewidth=0.8)
+        ax.set_xlabel("Distance to 1st-NN synthetic")
+        ax.set_ylabel("Distance to 2nd-NN synthetic")
+        ax.set_title("Real → Synthetic: Nearest vs. Second-Nearest Distance")
         ax.legend(fontsize=8)
 
         fig.suptitle(
             f"Re-identification Risk  |  rate={results.reidentification_rate:.2%}  |  "
-            f"median ratio={results.median_distance_ratio:.3f}",
+            f"median gap={results.median_gap_ratio:.3f}  |  "
+            f"at-risk={results.num_at_risk}",
             fontsize=11,
         )
         plt.tight_layout()
