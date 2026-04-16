@@ -60,7 +60,9 @@ class GaussianCopulaBasic(SynthetizationModelInterface):
         peptide_non_negative: bool = True,
         clip_columns: Optional[dict] = None,
         categorical_columns: Optional[list[str]] = None,
+        random_seed: Optional[int] = None,
     ):
+        self.random_seed = random_seed
         self.sdv_preprocessor = sdv_preprocessor
         self.preprocessing_transformations: Optional[dict] = None
 
@@ -216,7 +218,7 @@ class GaussianCopulaBasic(SynthetizationModelInterface):
             raise ModelNotFittedError("Model must be fitted before generating data.")
 
         logger.info(f"Generating {n_synthetic_samples} synthetic samples...")
-        generated_data_np = self.copula.rvs(nobs=n_synthetic_samples)
+        generated_data_np = self.copula.rvs(nobs=n_synthetic_samples, random_state=self.random_seed)
         logger.success(f"Generated synthetic data with shape {generated_data_np.shape}")
 
         generated_df_pl = pl.DataFrame(generated_data_np, schema=self.column_names)
@@ -297,7 +299,7 @@ class GaussianCopulaBasic(SynthetizationModelInterface):
             match self.copula_type:
                 case "gaussian":
                     self.copula_generator_func = QuantileTransformer(
-                        output_distribution="normal"
+                        output_distribution="normal", random_state=self.random_seed
                     )
                     return self.copula_generator_func.fit_transform(X)
                 case "student":
