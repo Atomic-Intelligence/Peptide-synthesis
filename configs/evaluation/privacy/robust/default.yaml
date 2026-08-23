@@ -1,0 +1,43 @@
+# @package privacy.robust
+# ---------------------------------------------------------------------------
+# Robust (multi-representation) privacy — DEFAULT preset (opt-in / disabled).
+# ---------------------------------------------------------------------------
+# Re-runs the entire privacy suite (DCR, authenticity, re-identification,
+# anonymeter, MIA — using the toggles/thresholds under `privacy:`) across
+# several feature representations, so the risk estimates don't hinge on a single
+# space. Runs at the top level only (per-event slices have a constant target, so
+# the TabPFN embedding space is undefined). Optional backends (umap-learn,
+# tabpfn) are skipped with a warning when unavailable.
+#
+# This preset is disabled by default (opt-in). Enable with `privacy/robust=full`
+# or `privacy/robust=fast`, or flip `privacy.robust.enabled=true`.
+
+enabled: false
+
+# Which representations to evaluate.
+run_identity: true        # raw feature space — the baseline
+run_subfeatures: true     # (1) random subsets of columns → risk distribution
+run_pca: true             # (2a) linear low-dim projection
+run_umap: true            # (2b) non-linear low-dim projection (needs umap-learn)
+run_tabpfn: true          # (3) TabPFN foundation-model embedding space (needs tabpfn)
+
+# (1) Variable subfeatures: draw N random column subsets and report the
+# mean/std/min/max/p5/p95 of every metric across draws.
+subfeature_subset_size: 10      # number of columns per draw
+subfeature_fraction: null       # or a fraction of columns (overrides subset_size)
+subfeature_n_draws: 20          # number of random subsets
+
+# (2) Reduced dimensionality.
+pca_components: 10
+umap_components: 5
+
+# (3) TabPFN embedding space. Requires a supervised target column with >=2
+# classes in the real data; event_type is the natural clinical label.
+tabpfn_target_col: event_type
+# Path to a local TabPFN checkpoint, "auto" to let TabPFN resolve one, or set the
+# TABPFN_MODEL_PATH env var. Local/offline use avoids the license gate.
+tabpfn_model_path: auto
+tabpfn_device: auto             # auto | cpu | cuda
+tabpfn_n_estimators: 4
+
+seed: 0

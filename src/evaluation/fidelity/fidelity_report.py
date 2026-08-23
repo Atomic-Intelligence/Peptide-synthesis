@@ -68,9 +68,10 @@ from src.evaluation.fidelity.joint_fidelity import (
     JointFidelityResults,
 )
 from src.evaluation.fidelity.classifier_test import (
-    TwoSampleClassifierTest,
+    MultiTwoSampleClassifierTest,
     TwoSampleClassifierResults,
     TwoSampleClassifierResultsByRange,
+    TwoSampleMultiClassifierResults,
 )
 from src.evaluation.analysis.correlation_uncertainty import (
     CorrelationUncertaintyEstimator,
@@ -94,7 +95,13 @@ class FidelityResults:
     marginal: Optional[MarginalFidelityResults] = None
     correlation: Optional[CorrelationFidelityResults] = None
     joint: Optional[JointFidelityResults] = None
-    classifier: Optional[Union[TwoSampleClassifierResults, TwoSampleClassifierResultsByRange]] = None
+    classifier: Optional[
+        Union[
+            TwoSampleClassifierResults,
+            TwoSampleClassifierResultsByRange,
+            TwoSampleMultiClassifierResults,
+        ]
+    ] = None
     corr_uncertainty: Optional[CorrelationUncertaintyResults] = None
     effect_size: Optional[EffectSizeResults] = None
     sparse_peptide: Optional[SparsePeptideFidelityResults] = None
@@ -143,7 +150,12 @@ class FidelityReport:
     n_classifier_folds :
         Cross-validation folds for the two-sample classifier test.
     classifier_type :
-        Classifier for the two-sample test.
+        Discriminator(s) for the two-sample test.  A single name runs one
+        classifier; a list runs each and reports them side by side, with the
+        first entry treated as the primary (keeps the unsuffixed mlflow keys).
+        Valid names: ``"random_forest"``, ``"logistic_regression"``, ``"svc"``
+        (linear-kernel SVM), ``"svc_rbf"`` (non-linear RBF-kernel SVM),
+        ``"gradient_boosted"``.
     max_correlation_cols :
         Column cap for correlation sub-modules.
     max_corr_uncertainty_cols :
@@ -169,7 +181,7 @@ class FidelityReport:
         corr_method: str = "spearman",
         n_bootstrap: int = 1000,
         n_classifier_folds: int = 5,
-        classifier_type: str = "random_forest",
+        classifier_type: Union[str, List[str]] = "random_forest",
         max_correlation_cols: int = 60,
         max_corr_uncertainty_cols: int = 50,
         effect_size_continuous_metrics: Optional[List[str]] = None,
@@ -204,10 +216,10 @@ class FidelityReport:
             else None
         )
         self._clf_test = (
-            TwoSampleClassifierTest(
+            MultiTwoSampleClassifierTest(
+                classifier_types=classifier_type,
                 scaler=_scaler,
                 categorical_columns=self.categorical_columns,
-                classifier=classifier_type,
                 n_folds=n_classifier_folds,
                 peptide_zero_threshold=peptide_zero_threshold,
                 peptide_zero_ranges=peptide_zero_ranges,

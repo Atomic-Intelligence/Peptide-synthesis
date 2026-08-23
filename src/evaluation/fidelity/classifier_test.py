@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple, Union
 from loguru import logger
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import roc_auc_score
@@ -95,6 +95,50 @@ class TwoSampleClassifierResultsByRange:
         return metrics
 
 
+@dataclass
+class TwoSampleMultiClassifierResults:
+    """Results from running the two-sample test with several discriminators.
+
+    Attributes
+    ----------
+    results_by_classifier :
+        Ordered dict mapping classifier type (e.g. ``"random_forest"``) to its
+        result.  Each value is a ``TwoSampleClassifierResults`` (single test) or
+        a ``TwoSampleClassifierResultsByRange`` (when zero-fraction ranges are
+        configured).
+    primary :
+        The classifier whose metrics are also emitted under the original,
+        unsuffixed keys (``fidelity/two_sample_auc``) for backward compatibility.
+        Defaults to the first classifier in ``results_by_classifier``.
+    """
+
+    results_by_classifier: Dict[
+        str, Union[TwoSampleClassifierResults, TwoSampleClassifierResultsByRange]
+    ] = field(default_factory=dict)
+    primary: Optional[str] = None
+
+    def summary(self) -> Dict[str, float]:
+        """Flat metric dict for mlflow.log_metrics().
+
+        The primary discriminator keeps the original unsuffixed keys.  When more
+        than one discriminator ran, every discriminator additionally contributes
+        keys suffixed with ``__<classifier_type>``.
+        """
+        metrics: Dict[str, float] = {}
+        if not self.results_by_classifier:
+            return metrics
+
+        primary = self.primary or next(iter(self.results_by_classifier))
+        if primary in self.results_by_classifier:
+            metrics.update(self.results_by_classifier[primary].summary())
+
+        if len(self.results_by_classifier) > 1:
+            for clf, res in self.results_by_classifier.items():
+                for k, v in res.summary().items():
+                    metrics[f"{k}__{clf}"] = v
+        return metrics
+
+
 def _make_classifier(classifier_type: str):
     """Instantiate the requested classifier.
 
@@ -126,11 +170,44 @@ def _make_classifier(classifier_type: str):
             class_weight="balanced",
             random_state=42,
         )
+    elif classifier_type == "svc_rbf":
+        # Non-linear (RBF-kernel) SVM.  probability=False avoids the expensive
+        # internal Platt-scaling CV — AUC is computed from decision_function
+        # scores, which only need to rank samples, not be calibrated.
+        return SVC(
+            kernel="rbf",
+            gamma="scale",
+            probability=False,
+            class_weight="balanced",
+            random_state=42,
+        )
+    elif classifier_type == "gradient_boosted":
+        # Histogram-based gradient boosting: a strong non-linear discriminator.
+        # class_weight='balanced' (added in sklearn 1.5) mirrors the other
+        # classifiers' handling of real/synth size differences.
+        return HistGradientBoostingClassifier(
+            max_depth=6,
+            class_weight="balanced",
+            random_state=42,
+        )
     else:
         raise ValueError(
-            f"Unknown classifier type '{classifier_type}'. "
-            "Choose 'random_forest', 'logistic_regression', or 'svc'."
+            f"Unknown classifier type '{classifier_type}'. Choose 'random_forest', "
+            "'logistic_regression', 'svc', 'svc_rbf', or 'gradient_boosted'."
         )
+
+
+def _predict_scores(clf, X: np.ndarray) -> np.ndarray:
+    """Return per-sample scores for the positive (synthetic) class.
+
+    Prefers calibrated probabilities (``predict_proba``); falls back to the
+    uncalibrated ``decision_function`` for estimators built without probability
+    support (e.g. an RBF SVM with ``probability=False``).  AUC-ROC is invariant
+    to monotonic transforms, so either scoring is valid for ranking.
+    """
+    if hasattr(clf, "predict_proba") and getattr(clf, "probability", True):
+        return clf.predict_proba(X)[:, 1]
+    return clf.decision_function(X)
 
 
 class TwoSampleClassifierTest:
@@ -260,8 +337,8 @@ class TwoSampleClassifierTest:
             clf = _make_classifier(self.classifier_type)
             clf.fit(X[train_idx], y[train_idx])
 
-            proba = clf.predict_proba(X[val_idx])[:, 1]
-            auc = float(roc_auc_score(y[val_idx], proba))
+            scores = _predict_scores(clf, X[val_idx])
+            auc = float(roc_auc_score(y[val_idx], scores))
             auc_scores.append(auc)
             logger.debug(f"  Fold {fold_idx + 1}/{self.n_folds}{tag} — AUC: {auc:.4f}")
 
@@ -483,5 +560,243 @@ class TwoSampleClassifierTest:
             fontsize=11,
             fontweight="bold",
         )
+        plt.tight_layout()
+        return fig
+
+
+class MultiTwoSampleClassifierTest:
+    """Run the two-sample classifier test with several discriminators.
+
+    Instantiates one ``TwoSampleClassifierTest`` per requested classifier type,
+    runs them against the same real/synthetic data, and collects the results
+    into a ``TwoSampleMultiClassifierResults``.  Sharing the same interface as
+    ``TwoSampleClassifierTest`` (``estimate`` / ``plot``) keeps the orchestrating
+    ``FidelityReport`` agnostic to whether one or many discriminators run.
+
+    Parameters
+    ----------
+    classifier_types :
+        A single classifier name or a list of them.  Order is preserved and
+        duplicates are dropped; the first entry becomes the "primary"
+        discriminator.  Valid names: ``"random_forest"``,
+        ``"logistic_regression"``, ``"svc"``, ``"gradient_boosted"``.
+    scaler, categorical_columns, n_folds, peptide_zero_threshold,
+    peptide_zero_ranges :
+        Forwarded unchanged to each underlying ``TwoSampleClassifierTest``.
+    """
+
+    def __init__(
+        self,
+        classifier_types: Union[str, List[str]],
+        scaler: Optional[Scaler] = None,
+        categorical_columns: Optional[List[str]] = None,
+        n_folds: int = 5,
+        peptide_zero_threshold: Optional[float] = None,
+        peptide_zero_ranges: Optional[List[Tuple[float, float]]] = None,
+    ):
+        if isinstance(classifier_types, str):
+            classifier_types = [classifier_types]
+        # De-duplicate while preserving order (handles OmegaConf ListConfig too).
+        seen: set = set()
+        ordered: List[str] = []
+        for c in classifier_types:
+            c = str(c)
+            if c not in seen:
+                seen.add(c)
+                ordered.append(c)
+        if not ordered:
+            raise ValueError("MultiTwoSampleClassifierTest: no classifier types given.")
+
+        self.classifier_types = ordered
+        self._tests: Dict[str, TwoSampleClassifierTest] = {
+            c: TwoSampleClassifierTest(
+                scaler=scaler,
+                categorical_columns=categorical_columns,
+                classifier=c,
+                n_folds=n_folds,
+                peptide_zero_threshold=peptide_zero_threshold,
+                peptide_zero_ranges=peptide_zero_ranges,
+            )
+            for c in ordered
+        }
+
+    def estimate(
+        self, real_df: pl.DataFrame, synth_df: pl.DataFrame
+    ) -> TwoSampleMultiClassifierResults:
+        """Run every configured discriminator and collect their results."""
+        logger.info(
+            "MultiTwoSampleClassifierTest — discriminators: "
+            f"{', '.join(self.classifier_types)}"
+        )
+        results: Dict[
+            str, Union[TwoSampleClassifierResults, TwoSampleClassifierResultsByRange]
+        ] = {}
+        for clf, test in self._tests.items():
+            results[clf] = test.estimate(real_df, synth_df)
+        return TwoSampleMultiClassifierResults(
+            results_by_classifier=results,
+            primary=self.classifier_types[0],
+        )
+
+    # ── visualisation ─────────────────────────────────────────────────────────
+
+    def plot(self, results: TwoSampleMultiClassifierResults) -> plt.Figure:
+        """Comparison figure across discriminators.
+
+        Non-ranged: a bar of mean AUC ± std per discriminator, plus a top
+        feature-importances panel from the first tree-based discriminator that
+        exposes them.  Ranged: grouped bars with zero-fraction ranges on the
+        x-axis and one bar per discriminator in each group.
+        """
+        items = list(results.results_by_classifier.items())
+        if not items:
+            fig, ax = plt.subplots(figsize=(6, 4))
+            ax.text(0.5, 0.5, "No results", ha="center", va="center")
+            return fig
+
+        if isinstance(items[0][1], TwoSampleClassifierResultsByRange):
+            return self._plot_ranged(results)
+        return self._plot_single(results)
+
+    @staticmethod
+    def _auc_color(auc: float) -> str:
+        return "#d62728" if auc > 0.7 else "#2ca02c" if auc < 0.55 else "#1f77b4"
+
+    def _plot_single(self, results: TwoSampleMultiClassifierResults) -> plt.Figure:
+        items: List[Tuple[str, TwoSampleClassifierResults]] = list(
+            results.results_by_classifier.items()
+        )
+        n_folds = items[0][1].n_folds
+
+        # Pick a discriminator with feature importances (primary first, then any).
+        primary = results.primary or items[0][0]
+        order = [primary] + [c for c, _ in items if c != primary]
+        imp_clf = next(
+            (
+                c
+                for c in order
+                if results.results_by_classifier[c].feature_importances is not None
+                and results.results_by_classifier[c].feature_names is not None
+            ),
+            None,
+        )
+
+        n_panels = 2 if imp_clf else 1
+        fig, axes = plt.subplots(1, n_panels, figsize=(6 * n_panels, 4.5))
+        if n_panels == 1:
+            axes = [axes]
+
+        # ── panel 1: mean AUC ± std per discriminator ─────────────────────
+        ax = axes[0]
+        labels = [c.replace("_", " ").title() for c, _ in items]
+        means = [r.auc_mean for _, r in items]
+        stds = [r.auc_std for _, r in items]
+        x = np.arange(len(items))
+        ax.bar(
+            x,
+            means,
+            yerr=stds,
+            capsize=4,
+            color=[self._auc_color(m) for m in means],
+            edgecolor="white",
+            linewidth=0.5,
+        )
+        ax.axhline(0.5, ls="--", lw=1.2, color="grey", label="Chance (AUC = 0.5)")
+        for xi, m in zip(x, means):
+            ax.text(xi, m + 0.02, f"{m:.3f}", ha="center", va="bottom", fontsize=8)
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, rotation=20, ha="right", fontsize=8)
+        ax.set_ylabel("AUC-ROC", fontsize=9)
+        ax.set_ylim(0.0, 1.05)
+        ax.set_title(
+            f"Two-Sample Classifier Comparison\n({n_folds}-fold CV, mean ± std)",
+            fontsize=10,
+            fontweight="bold",
+        )
+        ax.legend(fontsize=7)
+
+        # ── panel 2: feature importances from a tree-based discriminator ──
+        if imp_clf:
+            ax2 = axes[1]
+            r = results.results_by_classifier[imp_clf]
+            importances = r.feature_importances
+            names = np.array(r.feature_names)
+            top_n = min(20, len(importances))
+            top_idx = np.argsort(importances)[-top_n:][::-1]
+            y_pos = np.arange(top_n)
+            ax2.barh(
+                y_pos,
+                importances[top_idx][::-1],
+                color="#aec7e8",
+                edgecolor="white",
+                linewidth=0.4,
+            )
+            ax2.set_yticks(y_pos)
+            ax2.set_yticklabels(names[top_idx][::-1], fontsize=6)
+            ax2.set_xlabel("Mean importance", fontsize=9)
+            ax2.set_title(
+                f"Top-{top_n} Features ({imp_clf.replace('_', ' ').title()})",
+                fontsize=10,
+                fontweight="bold",
+            )
+
+        plt.tight_layout()
+        return fig
+
+    def _plot_ranged(self, results: TwoSampleMultiClassifierResults) -> plt.Figure:
+        items: List[Tuple[str, TwoSampleClassifierResultsByRange]] = list(
+            results.results_by_classifier.items()
+        )
+        # Union of range labels, ordered by first appearance.
+        range_labels: List[str] = []
+        for _, r in items:
+            for label in r.results_by_range:
+                if label not in range_labels:
+                    range_labels.append(label)
+
+        if not range_labels:
+            fig, ax = plt.subplots(figsize=(6, 4))
+            ax.text(0.5, 0.5, "No ranged results", ha="center", va="center")
+            return fig
+
+        fig, ax = plt.subplots(figsize=(max(7, 1.6 * len(range_labels)), 4.5))
+        x = np.arange(len(range_labels))
+        n_clf = len(items)
+        width = 0.8 / n_clf
+        cmap = plt.get_cmap("tab10")
+
+        for i, (clf, r) in enumerate(items):
+            means = [
+                r.results_by_range[label].auc_mean if label in r.results_by_range else 0.0
+                for label in range_labels
+            ]
+            stds = [
+                r.results_by_range[label].auc_std if label in r.results_by_range else 0.0
+                for label in range_labels
+            ]
+            ax.bar(
+                x + (i - (n_clf - 1) / 2) * width,
+                means,
+                width,
+                yerr=stds,
+                capsize=3,
+                color=cmap(i),
+                edgecolor="white",
+                linewidth=0.4,
+                label=clf.replace("_", " ").title(),
+            )
+
+        ax.axhline(0.5, ls="--", lw=1.2, color="grey", label="Chance")
+        ax.set_xticks(x)
+        ax.set_xticklabels([f"[{lab})" for lab in range_labels], fontsize=8)
+        ax.set_xlabel("Zero-fraction range", fontsize=9)
+        ax.set_ylabel("AUC-ROC", fontsize=9)
+        ax.set_ylim(0.0, 1.05)
+        ax.set_title(
+            "Two-Sample Classifier Comparison by Zero-Fraction Range",
+            fontsize=11,
+            fontweight="bold",
+        )
+        ax.legend(fontsize=7, ncol=2)
         plt.tight_layout()
         return fig

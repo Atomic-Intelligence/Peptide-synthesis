@@ -1,0 +1,30 @@
+# @package privacy.robust
+# ---------------------------------------------------------------------------
+# Robust privacy — OFF preset (explicitly disabled).
+# ---------------------------------------------------------------------------
+# Same as `default` in effect, but named for intent. Select with:
+# privacy/robust=off
+# The remaining keys are still provided so `privacy.robust.enabled=true` on the
+# CLI produces a valid, runnable config without picking another preset.
+
+enabled: false
+
+run_identity: true
+run_subfeatures: true
+run_pca: true
+run_umap: true
+run_tabpfn: true
+
+subfeature_subset_size: 10
+subfeature_fraction: null
+subfeature_n_draws: 20
+
+pca_components: 10
+umap_components: 5
+
+tabpfn_target_col: event_type
+tabpfn_model_path: auto
+tabpfn_device: auto
+tabpfn_n_estimators: 4
+
+seed: 0

@@ -254,7 +254,8 @@ def plot_eigenvalue_spectrum(
             f"Signal: {res.n_signal_eigs} / {res.n_features} "
             f"({res.n_signal_eigs/res.n_features*100:.1f}%)"
         )
-        ax.legend(fontsize=8)
+        ax.legend(fontsize=8, loc="upper left", bbox_to_anchor=(1.01, 1),
+                  borderaxespad=0)
 
         # ── Panel 2: MP density histogram (bulk eigenvalues only) ───────────
         ax = axes[1]
@@ -376,7 +377,7 @@ def plot_summary_bar(results: list[ClippingAnalysis], save_dir: Path) -> None:
     bars_sig   = ax.bar(x, n_signal, width, color="seagreen",   label="Signal (> λ+)")
     bars_noise = ax.bar(x, n_noise,  width, bottom=n_signal,
                         color="lightgray", label="Noise / bulk (≤ λ+)")
-    y_max_mp = max(n_total, default=100) * 1.12
+    y_max_mp = max(n_total, default=100) * 1.40
     ax.set_ylim(0, y_max_mp)
     # Annotate signal count (inside green bar) and λ+ (above full stacked bar)
     for bar_s, bar_n, ns, q_val in zip(

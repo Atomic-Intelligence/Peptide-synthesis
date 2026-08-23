@@ -2,6 +2,20 @@
 # Run with: python -m src.evaluation.evaluate
 # Override any value on the CLI, e.g.:
 #   python -m src.evaluation.evaluate paths.real_data_path=/data/real.csv
+#
+# The robust (multi-representation) privacy settings are a swappable config
+# group: select a preset with `privacy/robust=<preset>` on the CLI, e.g.
+#   python -m src.evaluation.evaluate privacy/robust=full
+# Available presets live in configs/evaluation/privacy/robust/
+# (default | full | fast | off). Individual keys can still be overridden, e.g.
+#   privacy/robust=full privacy.robust.subfeature_n_draws=50
+
+# ---------------------------------------------------------------------------
+# Config-group defaults
+# ---------------------------------------------------------------------------
+defaults:
+  - _self_
+  - privacy/robust: default
 
 # ---------------------------------------------------------------------------
 # Data paths
@@ -56,7 +70,7 @@ save_json: true     # writes metrics.json to output_dir
 # ---------------------------------------------------------------------------
 # Fidelity
 # ---------------------------------------------------------------------------
-run_fidelity: true
+run_fidelity: false
 fidelity:
   run_marginal: true
   run_correlation: true
@@ -69,7 +83,15 @@ fidelity:
   n_bootstrap: 200                # raise to 1000 for publication-quality CIs
   max_corr_uncertainty_cols: 30
   n_classifier_folds: 4
-  classifier_type: logistic_regression  # random_forest | logistic_regression | svc | gradient_boosted
+  # A single name runs one discriminator; a list runs each and compares them
+  # (first entry is primary — keeps the unsuffixed fidelity/two_sample_auc key).
+  # Choices: random_forest | logistic_regression | svc | svc_rbf | gradient_boosted
+  #   svc = linear-kernel SVM; svc_rbf = non-linear RBF-kernel SVM
+  classifier_type:
+    - random_forest
+    - logistic_regression
+    - svc
+    - gradient_boosted
   # Exclude sparse peptide columns from classifier and joint tests.
   # Peptides with a zero fraction above this threshold are dropped (null = disabled).
   peptide_zero_threshold: null
@@ -143,3 +165,12 @@ privacy:
   # Columns the adversary tries to infer in the attribute inference attack.
   # null = defaults to categorical_columns.
   inference_target_cols: null
+
+  # ---------------------------------------------------------------------------
+  # Robust (multi-representation) privacy
+  # ---------------------------------------------------------------------------
+  # Provided by the `privacy/robust` config group (see the defaults list at the
+  # top of this file and configs/evaluation/privacy/robust/*.yaml). Select a
+  # preset with `privacy/robust=<preset>`; the chosen preset is merged in here as
+  # `privacy.robust.*`. Do not set `robust:` inline — it would be overwritten by
+  # the group.

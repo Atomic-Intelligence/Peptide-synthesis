@@ -51,7 +51,7 @@ import polars as pl
 import matplotlib.pyplot as plt
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import RobustScaler
-from typing import List, Optional
+from typing import Dict, List, Optional
 from pydantic import BaseModel, ConfigDict
 from loguru import logger
 
@@ -119,6 +119,7 @@ class ReidentificationRiskEstimator:
         algorithm: str = "ball_tree",
         distance_metric: str = "euclidean",
         fitted_feature_processor: Optional["FeatureProcessor"] = None,
+        feature_groups: Optional[Dict[str, List[str]]] = None,
     ):
         self.distance_metric = distance_metric
         self.categorical_columns = categorical_columns or []
@@ -128,6 +129,7 @@ class ReidentificationRiskEstimator:
         if distance_metric == "gower":
             self._gower = GowerDistanceCalculator(
                 categorical_columns=self.categorical_columns,
+                feature_groups=feature_groups,
             )
             self.feature_processor = None
         else:

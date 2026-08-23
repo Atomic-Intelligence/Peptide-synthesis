@@ -1,0 +1,29 @@
+# @package privacy.robust
+# ---------------------------------------------------------------------------
+# Robust privacy — FAST preset (enabled, lightweight smoke/iteration run).
+# ---------------------------------------------------------------------------
+# Fewer subfeature draws, small TabPFN ensemble, UMAP off (it is the slowest
+# reducer). Good for quick iteration or CPU-only boxes.
+# Select with: privacy/robust=fast
+
+enabled: true
+
+run_identity: true
+run_subfeatures: true
+run_pca: true
+run_umap: false
+run_tabpfn: true
+
+subfeature_subset_size: 8
+subfeature_fraction: null
+subfeature_n_draws: 5
+
+pca_components: 6
+umap_components: 4
+
+tabpfn_target_col: event_type
+tabpfn_model_path: auto
+tabpfn_device: cpu
+tabpfn_n_estimators: 2
+
+seed: 0

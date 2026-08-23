@@ -1,0 +1,31 @@
+# @package privacy.robust
+# ---------------------------------------------------------------------------
+# Robust privacy — FULL preset (enabled, thorough, publication-grade).
+# ---------------------------------------------------------------------------
+# Every representation on, many subfeature draws, larger TabPFN ensemble. Slow.
+# Select with: privacy/robust=full
+# UMAP needs `umap-learn` and TabPFN needs `tabpfn` + a resolvable checkpoint;
+# either is skipped with a warning if unavailable.
+
+enabled: true
+
+run_identity: true
+run_subfeatures: true
+run_pca: true
+run_umap: true
+run_tabpfn: true
+
+# Denser subfeature sampling for tighter distribution estimates.
+subfeature_subset_size: 10
+subfeature_fraction: null
+subfeature_n_draws: 50
+
+pca_components: 10
+umap_components: 5
+
+tabpfn_target_col: event_type
+tabpfn_model_path: auto
+tabpfn_device: auto
+tabpfn_n_estimators: 8
+
+seed: 0

@@ -25,7 +25,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 import hydra
 import matplotlib
@@ -39,6 +39,10 @@ from sklearn.preprocessing import RobustScaler
 
 from src.evaluation.fidelity.fidelity_report import FidelityReport, FidelityResults
 from src.evaluation.privacy.privacy_report import PrivacyReport, PrivacyResults
+from src.evaluation.privacy.robust_privacy import (
+    RobustPrivacyReport,
+    RobustPrivacyResults,
+)
 from src.evaluation.utils.eval_utils import sparse_peptide_columns
 
 
@@ -53,6 +57,7 @@ class EvaluationResults:
 
     fidelity: Optional[FidelityResults] = None
     privacy: Optional[PrivacyResults] = None
+    robust_privacy: Optional[RobustPrivacyResults] = None
     figures: Dict[str, plt.Figure] = field(default_factory=dict)
     per_event: Dict[str, "EvaluationResults"] = field(default_factory=dict)
 
@@ -68,6 +73,8 @@ class EvaluationResults:
             out.update(self.fidelity.summary())
         if self.privacy is not None:
             out.update(self.privacy.summary())
+        if self.robust_privacy is not None:
+            out.update(self.robust_privacy.summary())
         for event, event_results in self.per_event.items():
             for k, v in event_results.summary().items():
                 out[f"{event}/{k}"] = v
@@ -142,7 +149,10 @@ class SyntheticDataEvaluator:
         Bootstrap iterations for correlation uncertainty.
     max_corr_uncertainty_cols : int
     n_classifier_folds : int
-    classifier_type : "random_forest" | "logistic_regression" | "gradient_boosted"
+    classifier_type : str | list[str]
+        One discriminator, or a list to run several and compare them. Choices:
+        "random_forest" | "logistic_regression" | "svc" (linear SVM) |
+        "svc_rbf" (non-linear RBF SVM) | "gradient_boosted".
     effect_size_continuous_metrics / effect_size_categorical_metrics : list[str] | None
 
     Privacy flags
@@ -179,9 +189,7 @@ class SyntheticDataEvaluator:
         n_bootstrap: int = 1000,
         max_corr_uncertainty_cols: int = 50,
         n_classifier_folds: int = 5,
-        classifier_type: Literal[
-            "random_forest", "logistic_regression", "gradient_boosted"
-        ] = "random_forest",
+        classifier_type: Union[str, List[str]] = "random_forest",
         effect_size_continuous_metrics: Optional[List[str]] = None,
         effect_size_categorical_metrics: Optional[List[str]] = None,
         peptide_zero_threshold: Optional[float] = None,
@@ -211,6 +219,23 @@ class SyntheticDataEvaluator:
         mia_classifier: str = "logistic_regression",
         mia_n_folds: int = 5,
         mia_high_risk_threshold: float = 0.9,
+        # ── robust (multi-representation) privacy ──────────────────────────
+        run_robust_privacy: bool = False,
+        robust_run_identity: bool = True,
+        robust_run_subfeatures: bool = True,
+        robust_run_pca: bool = True,
+        robust_run_umap: bool = True,
+        robust_run_tabpfn: bool = True,
+        robust_subfeature_subset_size: int = 10,
+        robust_subfeature_fraction: Optional[float] = None,
+        robust_subfeature_n_draws: int = 20,
+        robust_pca_components: int = 10,
+        robust_umap_components: int = 5,
+        robust_tabpfn_target_col: str = "event_type",
+        robust_tabpfn_model_path: str = "auto",
+        robust_tabpfn_device: str = "auto",
+        robust_tabpfn_n_estimators: int = 4,
+        robust_seed: int = 0,
     ):
         self.categorical_columns = categorical_columns
         self.scaler = scaler or RobustScaler()
@@ -271,6 +296,58 @@ class SyntheticDataEvaluator:
             mia_n_folds=mia_n_folds,
             mia_high_risk_threshold=mia_high_risk_threshold,
         )
+
+        # Robust (multi-representation) privacy. Re-runs the full privacy suite
+        # across the raw space plus random subfeature subsets, PCA, UMAP, and the
+        # TabPFN embedding space so the risk estimates don't hinge on one
+        # representation. Shares the same privacy toggles/thresholds as above.
+        self.run_robust_privacy = run_robust_privacy
+        self.robust_tabpfn_target_col = robust_tabpfn_target_col
+        self._robust_privacy_report: Optional[RobustPrivacyReport] = None
+        if run_robust_privacy:
+            base_privacy_kwargs = dict(
+                scaler=self.scaler,
+                holdout_fraction=holdout_fraction,
+                par_percentile=par_percentile,
+                run_dcr=run_dcr,
+                run_authenticity=run_authenticity,
+                authenticity_threshold=authenticity_threshold,
+                run_reidentification=run_reidentification,
+                reid_risk_threshold=reid_risk_threshold,
+                dcr_distance_metric=dcr_distance_metric,
+                reid_distance_metric=reid_distance_metric,
+                run_singling_out=run_singling_out,
+                run_linkability=run_linkability,
+                run_attribute_inference=run_attribute_inference,
+                n_anonymeter_attacks=n_anonymeter_attacks,
+                anonymeter_n_jobs=anonymeter_n_jobs,
+                gap_ratio_threshold=gap_ratio_threshold,
+                inference_tolerance=inference_tolerance,
+                run_membership_inference=run_membership_inference,
+                mia_attack_signal=mia_attack_signal,
+                mia_classifier=mia_classifier,
+                mia_n_folds=mia_n_folds,
+                mia_high_risk_threshold=mia_high_risk_threshold,
+            )
+            self._robust_privacy_report = RobustPrivacyReport(
+                base_privacy_kwargs=base_privacy_kwargs,
+                categorical_columns=categorical_columns,
+                run_identity=robust_run_identity,
+                run_subfeatures=robust_run_subfeatures,
+                run_pca=robust_run_pca,
+                run_umap=robust_run_umap,
+                run_tabpfn=robust_run_tabpfn,
+                subfeature_subset_size=robust_subfeature_subset_size,
+                subfeature_fraction=robust_subfeature_fraction,
+                subfeature_n_draws=robust_subfeature_n_draws,
+                pca_components=robust_pca_components,
+                umap_components=robust_umap_components,
+                tabpfn_target_col=robust_tabpfn_target_col,
+                tabpfn_model_path=robust_tabpfn_model_path,
+                tabpfn_device=robust_tabpfn_device,
+                tabpfn_n_estimators=robust_tabpfn_n_estimators,
+                seed=robust_seed,
+            )
 
     # ------------------------------------------------------------------
     # Main entry point
@@ -412,6 +489,36 @@ class SyntheticDataEvaluator:
             privacy_results = self._privacy_report.run(real_feat, synth_feat)
             logger.info("Privacy report complete.")
 
+        # ── Robust (multi-representation) privacy ──────────────────────────
+        # Only at the top level: per-event slices have a constant target, so the
+        # TabPFN embedding space is undefined, and re-running the full multi-space
+        # suite per event would be prohibitively expensive.
+        robust_privacy_results: Optional[RobustPrivacyResults] = None
+        if self.run_robust_privacy and self._robust_privacy_report is not None:
+            logger.info("Running robust (multi-representation) privacy report ...")
+            target_col = self.robust_tabpfn_target_col
+            # Re-attach the stratification/target column to the feature frames so
+            # the TabPFN representation has a supervised label to fit against.
+            robust_real, robust_synth = real_feat, synth_feat
+            robust_target_col: Optional[str] = None
+            if (
+                event_col_present
+                and per_event_column == target_col
+                and target_col in real_df.columns
+            ):
+                robust_real = real_feat.with_columns(real_df.select(target_col))
+                robust_synth = synth_feat.with_columns(synth_df.select(target_col))
+                robust_target_col = target_col
+            elif target_col in real_feat.columns:
+                robust_target_col = target_col
+            robust_privacy_results = self._robust_privacy_report.run(
+                robust_real, robust_synth, target_col=robust_target_col
+            )
+            robust_fig = self._robust_privacy_report.plot(robust_privacy_results)
+            if robust_fig is not None:
+                all_figures["robust_privacy_comparison"] = robust_fig
+            logger.info("Robust privacy report complete.")
+
         # ── Per-event sub-reports ─────────────────────────────────────────
         per_event: Dict[str, EvaluationResults] = {}
         if event_col_present:
@@ -477,6 +584,7 @@ class SyntheticDataEvaluator:
         results = EvaluationResults(
             fidelity=fidelity_results,
             privacy=privacy_results,
+            robust_privacy=robust_privacy_results,
             figures=all_figures,
             per_event=per_event,
         )
@@ -522,6 +630,7 @@ def main(cfg: DictConfig) -> None:
     # ── build evaluator ───────────────────────────────────────────────────
     fid = cfg.fidelity
     priv = cfg.privacy
+    robust = priv.get("robust", {}) if hasattr(priv, "get") else {}
     cat_cols = (
         OmegaConf.to_container(cfg.categorical_columns, resolve=True)
         if cfg.categorical_columns
@@ -604,6 +713,23 @@ def main(cfg: DictConfig) -> None:
         mia_classifier=priv.get("mia_classifier", "logistic_regression"),
         mia_n_folds=priv.get("mia_n_folds", 5),
         mia_high_risk_threshold=priv.get("mia_high_risk_threshold", 0.9),
+        # robust (multi-representation) privacy
+        run_robust_privacy=robust.get("enabled", False),
+        robust_run_identity=robust.get("run_identity", True),
+        robust_run_subfeatures=robust.get("run_subfeatures", True),
+        robust_run_pca=robust.get("run_pca", True),
+        robust_run_umap=robust.get("run_umap", True),
+        robust_run_tabpfn=robust.get("run_tabpfn", True),
+        robust_subfeature_subset_size=robust.get("subfeature_subset_size", 10),
+        robust_subfeature_fraction=robust.get("subfeature_fraction", None),
+        robust_subfeature_n_draws=robust.get("subfeature_n_draws", 20),
+        robust_pca_components=robust.get("pca_components", 10),
+        robust_umap_components=robust.get("umap_components", 5),
+        robust_tabpfn_target_col=robust.get("tabpfn_target_col", "event_type"),
+        robust_tabpfn_model_path=robust.get("tabpfn_model_path", "auto"),
+        robust_tabpfn_device=robust.get("tabpfn_device", "auto"),
+        robust_tabpfn_n_estimators=robust.get("tabpfn_n_estimators", 4),
+        robust_seed=robust.get("seed", 0),
     )
 
     # ── per-event config ──────────────────────────────────────────────────
@@ -699,6 +825,26 @@ def main(cfg: DictConfig) -> None:
                 privacy_csv_path = out_dir / "privacy_metrics.csv"
                 pl.DataFrame(privacy_rows, schema={"metric": pl.Utf8, "value": pl.Float64}).write_csv(privacy_csv_path)
                 logger.info(f"Privacy metrics written to {privacy_csv_path}")
+
+        # Robust (multi-representation) privacy: long-format comparison table
+        # (one row per representation × metric) plus the per-draw subfeature
+        # distribution.
+        if results.robust_privacy is not None:
+            robust_table = results.robust_privacy.comparison_table()
+            if not robust_table.is_empty():
+                robust_csv_path = out_dir / "robust_privacy_comparison.csv"
+                robust_table.write_csv(robust_csv_path)
+                logger.info(
+                    f"Robust privacy comparison written to {robust_csv_path}"
+                )
+            if results.robust_privacy.skipped:
+                logger.info(
+                    "Robust privacy skipped representations: "
+                    + ", ".join(
+                        f"{name} ({reason})"
+                        for name, reason in results.robust_privacy.skipped.items()
+                    )
+                )
 
         # Per-event: also write individual JSON files for convenience
         for event, ev_results in results.per_event.items():
